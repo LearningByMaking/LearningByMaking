@@ -1,0 +1,74 @@
+Welcome to Logo!
+print 123
+  123
+.print 123
+  123
+.compile
+  Compiling...
+  349 bytes
+.download
+  349 bytes
+onstart
+flash
+cyan
+magenta
+red
+cyan
+green
+flash
+load "iopins.txt
+  load undefined
+Welcome to Logo!
+make "srcfile "test.txt
+  srcfile isn't a local
+Welcome to Logo!
+./run.sh
+  I don't know how to /run.sh
+.compile
+  Compiling...
+  191 bytes
+.download
+  191 bytes
+print pin1
+  2
+print :pin1
+  pin1 has no value
+print "pin1
+  -12285
+print pin2
+  4
+print pin3
+  8
+print p3dir
+  26
+print p3out
+  25
+red
+  red undefined
+onstart
+  onstart undefined
+Welcome to Logo!
+.compile
+  Compiling...
+  191 bytes
+.download
+  191 bytes
+onstart
+  onstart undefined
+Welcome to Logo!
+exit
+  exit undefined
+quit
+  quit undefined
+Welcome to Logo!
+.compile
+  Compiling...
+  349 bytes
+.download
+  349 bytes
+onstart
+redon
+redoff
+blink
+  blink undefined
+flash

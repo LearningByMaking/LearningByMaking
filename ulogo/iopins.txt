@@ -1,0 +1,96 @@
+constants [
+[ta0ctl $0160][ta0r $0170][ta0ccr0 $172]
+
+[ucb0ctl0 $68][ucb0ctl1 $69][ucb0br0 $6a][ucb0br1 $6b][ucb0stat $6d][ucb0rxbuf $6e][ucb0txbuf $6f]
+
+[p1dir $22][p1out $21][p1in $20][p1sel $26]
+[p2dir $2a][p2out $29][p2in $28][p2sel $2e]
+[p3dir $1a][p3out $19][p3in $18][p3sel $1b]
+[p4dir $1E][p4out $1D][p4in $1C][p4sel $1F]
+[p5dir $32][p5out $31][p5in $30][p5sel $33]
+[p6dir $36][p6out $35][p6in $34][p6sel $37]
+  
+[pin0 $01][pin1 $02][pin2 $04][pin3 $08][pin4 $10][pin5 $20][pin6 $40][pin7 $80]
+
+[ADC12CTL0 $1A0][ADC12CTL1 $1A2][ADC12MEM0 $140]
+[ADC12IE $1A6][ADC12MCTL0 $80][ADC12IFG $1A4]
+[ADC12IV $1A8]
+
+[MSC $80][REF2_5V $40][REFON $20][ADC12ON $10][ENC $2][ADC12SC $1][SHT0_8 $100][ADC12CLK_16 $200][ADC12CLK_4 $0][ADC12CLK_256 $800]
+[SHP $200][SHS_ADC12SC $0][ASC12SSEL_SMCLK $18][CONSEQ_SINGLE $0]
+[EOS $80]
+
+       ]
+
+
+
+; This section sets up the digital IO pins to turn on and off. 
+; There are eight digital IO pins total. They are in slots 4
+; through 11 (the One-Wire being slot 1). The digital IO
+; pins are on ports 5, 4 and 3, and their individual pins on
+; the CPU are 5.0, 5.1, 5.2, 5.3, 4.0, 4.1, 3.6 and 3.7. 
+;
+; Note that pins on the CPU are distinct from pins on the dev
+; board. This is an unfortunate coincidence of nomenclature.
+; Perhaps we should call the dev board pins "slots" or something,
+; but we don't.
+;
+;
+
+; This first bit initializes all the digital IO pins, first setting
+; their direction, then setting their output state to low, in
+; this case the off state. You must run dp-init before turning
+; any of the digital IO pins on or off.
+
+to dp-init
+    bsetb p5dir pin3 + pin2 + pin1 + pin0
+    bclr p5out pin3 + pin2 + pin1 + pin0
+    
+    bsetb p4dir pin1 + pin0
+    bclr p4out pin1 + pin0
+    
+    bsetb p3dir pin7 + pin6
+    bclr p3out pin7 + pin6
+end
+
+; The following lines create words that turn the individual
+; pins on and off. They are numbered sequentially, with the 
+; first digital IO pin (adjacent to the analog pins) labelled 
+; "1." The last digital IO pin (next to the MISO/MOSI clock) is
+; labelled "8." Note that these labels are arbitrary, and we
+; could have used anything else we wanted. Only the stanzas
+; inside the brackets should be left unchanged, as they 
+; refer to other parts of the code.
+;
+; Example:
+; To turn on digital IO pin 1, you type dp1on after loading
+; this code.
+;
+; To turn the pin off, type dp1off, and the same for the
+; other pins.
+
+define dp1off [][bclr p5out pin3]
+define dp1on [][bset p5out pin3]
+
+define dp2off [][bclr p5out pin2]
+define dp2on [][bset p5out pin2]
+
+define dp3off [][bclr p5out pin1]
+define dp3on [][bset p5out pin1]
+
+
+define dp4off [][bclr p5out pin0]
+define dp4on [][bset p5out pin0]
+
+define dp5off [][bclr p4out pin1]
+define dp5on [][bset p4out pin1]
+
+define dp6off [][bclr p4out pin0]
+define dp6on [][bset p4out pin0]
+
+define dp7off [][bclr p3out pin7]
+define dp7on [][bset p3out pin7]
+
+define dp8off [][bclr p3out pin6]
+define dp8on [][bset p3out pin6]
+   
