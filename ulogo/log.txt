@@ -72,3 +72,9 @@ redoff
 blink
   blink undefined
 flash
+Welcome to Logo!
+.print 123
+  123
+Welcome to Logo!
+print 123
+  123
