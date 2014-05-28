@@ -2,5 +2,5 @@
 
 unzip LearningByMaking.zip
 sudo cp -r javalogo/ /usr/share/javalogo
-rm -rf ulogo/ javalogo/
-#rm -rf LearningByMaking.zip
+unzip CGM101V14.zip -d Oscilliscope
+unzip taxtext.zip -d TurtleLogo
