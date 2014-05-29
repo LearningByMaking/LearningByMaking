@@ -1,9 +1,9 @@
 #File: interpolation.tcl
-#Syscomp CircuitGear Graphic User Interface
-#Interpolation Routines
+#Syscomp USB Oscilloscope GUI
+#Scope Interpolation Procedures
 
 #JG
-#Copyright 2014 Syscomp Electronic Design
+#Copyright 2008 Syscomp Electronic Design
 #www.syscompdesign.com
 
 #This program is free software; you can redistribute it and/or
@@ -21,97 +21,69 @@
 #Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301
 #USA
 
+namespace eval interpolate {
 
-#THIS IS EXPERIMENTAL - IF YOU ARE READING THIS, YOU ARE VERY BRAVE
-
-namespace eval interpolation {
 
 }
 
-set pi [expr acos(-1.0)]
+proc interpolate::interpolate {plotData} {
+	global pData
+	global rData
+	
+	set pData $plotData
 
-set M 100
-set fc 0.1
-
-#Create the filter kernel
-set kernel {}
-set sum 0
-for {set i 0} {$i <= $M} {incr i} {
-	if {$i == [expr {$M/2}]} {
-		set h [expr {2*$pi*$fc*(0.54-0.46*cos(2*$pi*$i/$M)+0.08*cos(4*$pi*$i/$M))}]
-	} else {
-		set h [expr {sin(2*$pi*$fc*($i-$M/2.0))/($i-$M/2.0)*(0.54-0.46*cos(2*$pi*$i/$M)+0.08*cos(4*$pi*$i/$M))}]
+	if {$scope::timebaseIndex > 3} {
+		return
 	}
-	lappend kernel $h
-	set sum [expr {$sum+$h}]
-}
-for {set i 0} {$i <= $M} {incr i} {
-	set kernel [lreplace $kernel $i $i [expr {[lindex $kernel $i]/$sum}]]
-}
 
-#set fid [open kernel.csv w]
-#foreach k $kernel {
-#	puts $fid $k
-#}
-#close $fid
-
-proc interpolation::sincInterpolation {sampledData} {
+	set numSamples [llength $plotData]
 	
-	#Zero pad the data
-	set padded {}
-	for {set i 0} {$i < [expr [llength $sampledData]]} {incr i} {
-		lappend padded [lindex $sampledData $i]
-		lappend padded 1023
-		lappend padded 1023
-		lappend padded 1023
-		lappend padded 1023
+	set average 0
+	foreach sample $plotData {
+		set average [expr {$average+$sample}]
 	}
+	set average [expr {$average*1.0/$numSamples}]
 	
-	#Filter the interpolated data	
-	for {set i $::M} {$i < [llength $padded]} {incr i} {
-		set Y 0
-		for {set j 0} {$j <= $::M} {incr j} {
-			set X [lindex $padded [expr {$i-$j}]]
-			set H [lindex $::kernel $j]
-			set Y [expr {$Y + $X * $H}]
-		}
-		set padded [lreplace $padded $i $i $Y]
-	}
-	
-	return $padded
-	
-}
-
-proc interpolation::interpolate {sampledData} {
-
-	set interp {}
-	for {set i 1} {$i < [expr [llength $sampledData]-2]} {incr i} {
+	set returnData {}
+	lappend returnData [lindex $plotData 2]
+	lappend returnData [lindex $plotData 3]
+	for {set i 5} {$i < $numSamples} {set i [expr {$i+4}]} {
+		set x1 [lindex $plotData [expr {$i-3}]]
+		set y1 [lindex $plotData [expr {$i-2}]]
+		set x2 [lindex $plotData [expr {$i-1}]]
+		set y2 [lindex $plotData [expr {$i-0}]]
 		
-		set y0 [lindex $sampledData [expr {$i-1}]]
-		set y1 [lindex $sampledData [expr {$i}]]
-		set y2 [lindex $sampledData [expr {$i+1}]]
-		set y3 [lindex $sampledData [expr {$i+2}]]
+		set interpolateTime [expr {($x2-$x1)/5.0}]
 		
-		lappend interp $y1
-		lappend interp [interpolation::cubic 0.2 $y0 $y1 $y2 $y3]
-		lappend interp [interpolation::cubic 0.4 $y0 $y1 $y2 $y3]
-		lappend interp [interpolation::cubic 0.6 $y0 $y1 $y2 $y3]
-		lappend interp [interpolation::cubic 0.8 $y0 $y1 $y2 $y3]
+		#P0
+		lappend returnData $x2
+		lappend returnData $y2
+		
+	#P1
+		lappend returnData [expr {$x2+$interpolateTime}]
+		lappend returnData [expr {(($y2-$average)*0.94+(-0.16)*($y1-$average))+$average}]
+		
+		#P2
+		lappend returnData [expr {$x2+2*$interpolateTime}]
+		lappend returnData [expr {(($y2-$average)*0.76+(-0.22)*($y1-$average))+$average}]
+		
+		#P3
+		lappend returnData [expr {$x2+3*$interpolateTime}]
+		lappend returnData [expr {(($y2-$average)*(-0.5)+(-0.19)*($y1-$average))+$average}]
+		
+		#P4
+		lappend returnData [expr {$x2+4*$interpolateTime}]
+		lappend returnData [expr {(($y2-$average)*(-0.23)+(-0.16)*($y1-$average))+$average}]
+		
 	}
 	
-	return $interp
+	set rData $returnData
 	
+	set scopePath [getScopePath]
+	
+	$scopePath.display delete interpTag
+	$scopePath.display create line	\
+		$returnData	\
+		-tag interpTag	\
+		-fill black
 }
-
-proc interpolation::cubic {mu y0 y1 y2 y3} {
-	
-	set mu2 [expr {$mu*$mu}]
-	
-	set a0 [expr {$y3-$y2-$y0+$y1}]
-	set a1 [expr {$y0-$y1-$a0}]
-	set a2 [expr {$y2-$y0}]
-	set a3 $y1
-	
-	return [expr {$a0*$mu*$mu2 + $a1*$mu2 + $a2*$mu + $a3}]
-}
-

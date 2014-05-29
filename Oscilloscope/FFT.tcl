@@ -43,7 +43,7 @@ set linearMax 5
 #FFT Interface Control Variables
 set fftScale linear
 set fftWindow rectangular
-set fftSource A
+set fftSource a
 set fftEnable 0
 
 set pi 3.1415926535897931
@@ -67,7 +67,6 @@ proc fft::createFFT {} {
 
 	#Check to see if the FFT windows is already running, if so, raise it
 	if {[winfo exists .fft]} {
-		wm deiconify .fft
 		raise .fft
 		return
 	}
@@ -156,12 +155,12 @@ proc fft::createFFT {} {
 		
 	radiobutton .fft.source.a	\
 		-text "Channel A"		\
-		-value A			\
+		-value a			\
 		-variable fft::fftSource
 		
 	radiobutton .fft.source.b	\
 		-text "Channel B"		\
-		-value B			\
+		-value b			\
 		-variable fft::fftSource
 		
 	grid .fft.source.title -row 0 -column 0 -sticky we
@@ -267,23 +266,18 @@ proc fft::updateFFT {} {
 	if {!$fft::fftEnable} {return}
 	
 	#Determine which channel data we will be processing
-	if {$fftSource == "A" } {
-		#set fftData [lindex $export::exportData 0]
-		set fftData [lindex $scope::scopeData 0]
-		#set stepSize [lindex $export::exportData 2]
-		set stepSize [vertical::getStepSize A]
+	if {$fftSource == "a" } {
+		set fftData [lindex $export::exportData 0]
+		set stepSize [lindex $export::exportData 2]
 	} else {
-		#set fftData [lindex $export::exportData 1]
-		set fftData [lindex $scope::scopeData 1]
-		#set stepSize [lindex $export::exportData 3]
-		set stepSize [vertical::getStepSize B]
+		set fftData [lindex $export::exportData 1]
+		set stepSize [lindex $export::exportData 3]
 	}
 	
 	#Convert the data into voltage values
 	set norm {}
 	foreach datum $fftData {
-		#lappend norm [expr (512-$datum)*$stepSize]
-		lappend norm [vertical::convertSampleVoltage $datum $fftSource]
+		lappend norm [expr (512-$datum)*$stepSize]
 	}
 	
 	#Determine the number of samples
@@ -324,8 +318,7 @@ proc fft::updateFFT {} {
 	
 	#Calculate the effective sampling rate by dividing the hardware sampling rate
 	#by the burstIncrement.  The burstIncrement is used to subsample the data.
-	#set fftSampleRate [lindex $export::exportData 4]
-	set fftSampleRate [timebase::getSamplingRate]
+	set fftSampleRate [lindex $export::exportData 4]
 	
 	#Format the effective sampling rate for display purposes
 	if {$fftSampleRate >=1E6} {
@@ -416,7 +409,7 @@ proc fft::updateFFT {} {
 	}
 	
 	#Spectrum colors should match the coloring of the traces in the main window.
-	if {$fftSource == "A"} {
+	if {$fftSource == "a"} {
 		set spectrumColor red
 	} else {
 		set spectrumColor blue
@@ -475,12 +468,11 @@ proc fft::fftLinearScale {} {
 	variable linearMax
 
 	#Determine the data source and read out the A/D step size
-	#if {$fftSource == "A" } {
-	#	set stepConst [lindex $export::exportData 2]
-	#} else {
-	#	set stepConst [lindex $export::exportData 3]
-	#}
-	set stepConst [vertical::getStepSize $fftSource]
+	if {$fftSource == "a" } {
+		set stepConst [lindex $export::exportData 2]
+	} else {
+		set stepConst [lindex $export::exportData 3]
+	}
 	
 	#Determine the maximum value that can be measured at this vertical sensitivity
 	#set maxValue [expr {ceil(512.0*$stepConst)}]
@@ -620,12 +612,11 @@ proc fft::updateFFTCursor {} {
 
 		
 	#Read out the A/D step size for the selected channel.
-	#if {$fftSource == "a" } {
-	#	set stepSize [lindex $export::exportData 2]
-	#} else {
-	#	set stepSize [lindex $export::exportData 3]
-	#}
-	set stepSize [vertical::getStepSize $fftSource]
+	if {$fftSource == "a" } {
+		set stepSize [lindex $export::exportData 2]
+	} else {
+		set stepSize [lindex $export::exportData 3]
+	}
 		
 	#Make sure that the FFT window is still open (in case somebody closes it in the middle of the update)
 	if {![info exists fft]} {return}
@@ -669,8 +660,7 @@ proc fft::updateFFTCursor {} {
 		-tag fValue
 		
 	#Calculate and display the frequency value
-	#set sRate [lindex $export::exportData 4]
-	set sRate [timebase::getSamplingRate]
+	set sRate [lindex $export::exportData 4]
 	set fStep [expr {$sRate/(2*($fftLength-1))}]
 	set fX [expr {$fStep*$fftIndex}]
 	#Format the frequency rate for display purposes

@@ -24,7 +24,7 @@ package require http
 
 namespace eval updateCheck  {
 
-set revisionURL "http://www.syscompdesign.com/CGM101.txt"
+set revisionURL "http://www.syscompdesign.com/CGR101.txt"
 set updateResult 0
 
 set updateCheckEnable 1

@@ -24,12 +24,11 @@ set portHandle stdout
 namespace eval usbSerial {
 
 #---=== USB-Serial Global Variables ===---
-set serialPort "\\\\.\\COM27"
+set serialPort "?"
 set comNum "?"
 set serialStatus "Disconnected"
-set baudRate 115200
+set baudRate 230400
 set receivedData {}
-set eepromData {}
 set responseType "?"
 set validPorts {}
 
@@ -159,30 +158,33 @@ proc usbSerial::showConnectOptions {} {
 
 proc usbSerial::openSerialPort {} {
 	global portHandle
-	global serialCheck
 	
-	#Attempt to open the serial port
-	if { [catch {set portHandle [open $usbSerial::serialPort r+]} result] } {
+	#Check to see if we found the device...
+	set numAttempts 0
+	while {$numAttempts < 3} {
+		puts "Connect Attempt $numAttempts"
 		
-		if {$usbSerial::serialPort!="?"} {
-			tk_messageBox	\
-				-title "Communication Error"	\
-				-default ok		\
-				-message "Port COM$usbSerial::comNum can not be opened.  Already in use?"	\
-				-type ok			\
-				-icon warning
+		#Attempt to open the serial port
+		if { [catch {set portHandle [open $usbSerial::serialPort r+]} result] } {
+			
+			if {$usbSerial::serialPort!="?"} {
+				tk_messageBox	\
+					-title "Communication Error"	\
+					-default ok		\
+					-message "Port COM$usbSerial::comNum can not be opened.  Already in use?"	\
+					-type ok			\
+					-icon warning
+			}
+			
+			#Close the port, in case it is already open
+			usbSerial::closeSerialPort
+			showConnectOptions
+			return 0
 		}
 		
-		#Close the port, in case it is already open
-		usbSerial::closeSerialPort
-		
-		showConnectOptions
-
-		return 0
-
-	} else {
+		#The scope defaults to 230kbps on power up,
 		if {$::osType!="Darwin"} {
-			if {[catch {fconfigure $portHandle -mode $usbSerial::baudRate,n,8,1	-blocking 0	-buffering line -encoding binary} result]} {
+			if {[catch {fconfigure $portHandle -mode $usbSerial::baudRate,n,8,1	-blocking 0	-buffering line -encoding binary -translation {binary lf} -handshake rtscts} result]} {
 				#Display "Disconnected" status on the menubar
 				set usbSerial::serialStatus "Disconnected"
 				.menubar.serialPortStatus configure \
@@ -195,9 +197,7 @@ proc usbSerial::openSerialPort {} {
 					-icon warning
 				
 				::usbSerial::closeSerialPort
-				
 				showConnectOptions
-				
 				return 0
 			}
 		} else {
@@ -209,116 +209,96 @@ proc usbSerial::openSerialPort {} {
 				-encoding binary	\
 				-translation {binary lf}
 		}
-				
-		#We are now going to query the device.
-		#We set up  and intermediate fileevent handler to deal with 
-		#identification data received from the instrument
-		fileevent $portHandle readable {
-			set incomingData [gets $portHandle]
-			puts "incomingData: $incomingData"
-			if {  [lsearch $incomingData "Mini"] !=-1 } {
-				#Poke the serialCheck variable
-				set serialCheck found
-				#Global variable to store firmware information
-				set usbSerial::firmwareIdent $incomingData
-			} elseif {[string match "*CGM101BOOT*" $incomingData]==1} {
-				set serialCheck firmwareOnly
-				set usbSerial::firmwareIdent $incomingData
-			} else {
-				puts "No match"
-			}
-		}		
-		puts "Querying device..."
-		#Query the device.
-		sendCommand ""
-		sendCommand ""
-		flush $portHandle
-		after 500
-		set junk [read $portHandle]
-		sendCommand i
 		
-		#Wait for a response from the device
-		set serialCheck waiting
-		set timeoutID [after 1500 {set serialCheck timeout}]
-		vwait serialCheck
-		after cancel $timeoutID
-		
-		#Check to see if we found the device...
-		if { $serialCheck == "found" } {
-			puts "Connected."
-			
-			#Enable handshaking
-			fconfigure $portHandle -handshake rtscts -translation {binary lf}
-			
-			#Display "Connected" status on menu bar
-			set usbSerial::serialStatus "Connected"
-			.menubar.serialPortStatus configure -background green
-			usbSerial::setupFileevent
-			#Connect was successful
-			bind . Destroy {usbSerial::closeSerialPort; destroy .}
-			
-			if {[firmware::checkFirmware]} {
-				initializeCGR
-			} else {
-				set answer [tk_messageBox	\
-					-default yes	\
-					-icon question	\
-					-message "A firmware update is available.\nWould you like to perform a firmware upgrade?"	\
-					-parent .	\
-					-title "Firmware Upgrade"	\
-					-type yesno]
-				if {$answer == "yes"} {
-					firmware::showFirmware
-				} else {
-					initializeCGR
-				}
-			}
-		
-			return 1
-			
-		} elseif {$serialCheck == "firmwareOnly"} {
-			puts "Connected - firmware upgrade only"
-			
-			set answer [tk_messageBox	\
-				-default no	\
-				-icon question	\
-				-message "Instrument is blank.\nWould you like to perform a firmware upgrade?"	\
-				-parent .	\
-				-title "Firmware Error"	\
-				-type yesno]
-			
-			if {$answer == "yes"} {
-				firmware::showFirmware
-				return 1
-			} else {
-				usbSerial::closeSerialPort
-				return 0
-			}
-			
-		
+		if {![usbSerial::queryDevice]} {
+			usbSerial::closeSerialPort
+			incr numAttempts
 		} else {
-			puts "Failed."
-			
-			#Display "Disconnected" status on the menubar
-			set usbSerial::serialStatus "Disconnected"
-			.menubar.serialPortStatus configure \
-				-background red
-			tk_messageBox	\
-				-title "Communication Error"	\
-				-default ok		\
-				-message "Device on COM$usbSerial::comNum did not respond."	\
-				-type ok			\
-				-icon warning
-			
-			#::usbSerial::closeSerialPort
-			
-			showConnectOptions
-			
-			return 0
-			
+			break
 		}
 	}
+		
+	if {$numAttempts < 3} {
+		puts "Connected."
+		
+		#Enable handshaking
+		fconfigure $portHandle -handshake rtscts 
+		
+		#Display "Connected" status on menu bar
+		set usbSerial::serialStatus "Connected"
+		.menubar.serialPortStatus configure -background green
+		usbSerial::setupFileevent
+		#Connect was successful
+		bind . Destroy {usbSerial::closeSerialPort; destroy .}
+		initializeCGR
+		return 1
+		
+	} else {
+		puts "Failed."
+		#Display "Disconnected" status on the menubar
+		set usbSerial::serialStatus "Disconnected"
+		.menubar.serialPortStatus configure \
+			-background red
+		tk_messageBox	\
+			-title "Communication Error"	\
+			-default ok		\
+			-message "Device on COM$usbSerial::comNum did not respond."	\
+			-type ok			\
+			-icon warning
+		::usbSerial::closeSerialPort
+		showConnectOptions
+		return 0
+	}
 
+}
+
+#Query Device
+#---------------
+# Query the device.  Device port should already be open
+proc usbSerial::queryDevice {} {
+	global portHandle
+	global timeoutHandle
+	global serialCheck
+	
+	#We are now going to query the device.
+	#We set up  and intermediate fileevent handler to deal with 
+	#identification data received from the instrument
+	fileevent $portHandle readable {
+		set incomingData [gets $portHandle]
+		puts "incomingData: $incomingData"
+		if {  [lsearch $incomingData "CircuitGear"] !=-1 } {
+			after cancel $timeoutHandle
+			#Global variable to store firmware information
+			set usbSerial::firmwareIdent $incomingData
+			#Poke the serialCheck variable
+			set serialCheck found
+		} else {
+			puts "No match"
+		}
+	}		
+	puts "Querying device..."
+	#Query the device.
+	after 500
+	update
+	sendCommand ""
+	sendCommand ""
+	flush $portHandle
+	after 500
+	update
+	set junk [read $portHandle]
+	set timeoutHandle [after 1500 {set serialCheck timeout}]
+	sendCommand i
+	
+	#Wait for a response from the device
+	set serialCheck waiting
+	vwait serialCheck
+	
+	if {$serialCheck == "found"} {
+		puts "Device responded"
+		return 1
+	} else {
+		return 0
+	}
 }
 
 #Set Up Fileevent
@@ -368,104 +348,116 @@ proc ::usbSerial::processResponse {} {
 	
 	#Process the message based on it's message type
 	switch $usbSerial::responseType {
-		"D" {
-			#Data from scope capture
-			if {$responseLength >=4098} {
-				#Sort out data received from scope
-				set temp [lrange $usbSerial::receivedData 1 4098]
+		"A" {
+			#Address from scope capture
+			if {$responseLength >=3} {
+				#Address received from scope
+				set temp [lrange $usbSerial::receivedData 0 2]
 				#Deal with left-over data in the receive buffer
-				if {$responseLength > 4098} {
-					set usbSerial::receivedData [lrange $usbSerial::receivedData 4098 end]
+				if {$responseLength > 3} {
+					set usbSerial::receivedData [lrange $usbSerial::receivedData 3 end]
+				} else {
+					set usbSerial::receivedData {}
+				}
+				#Convert and store the trigger point
+				scope::saveTriggerPoint $temp
+				#Read the scope data buffer
+				sendCommand "S B "
+			} else {
+				return
+			}
+		} "D" {
+			#Data from scope capture
+			if {$responseLength >=4097} {
+				#Sort out data received from scope
+				set temp [lrange $usbSerial::receivedData 0 4096]
+				#Deal with left-over data in the receive buffer
+				if {$responseLength > 4097} {
+					set usbSerial::receivedData [lrange $usbSerial::receivedData 4097 end]
 				} else {
 					set usbSerial::receivedData {}
 				}
 				#Process the capture data returned from the scope
-				scope::processData $temp
+				scope::processScopeData $temp
 			} else {
-				#puts "Waiting for more data!"
 				return
 			}
-		} "T" {
-			if {$responseLength >=5} {
-				set temp [lrange $usbSerial::receivedData 1 2]
-				set bufferTemp [lrange $usbSerial::receivedData 3 4]
-				if {$responseLength > 5} {
-					set usbSerial::receivedData [lrange $usbSerial::receivedData 5 end]
+		} "E" {
+			#Received an error, display the error
+			if { [lsearch $usbSerial::receivedData 10] != -1} {
+				set index [lsearch $usbSerial::receivedData 10]
+				set temp [lrange $usbSerial::receivedData 0 $index]
+				if { $responseLength > [expr {$index + 1}] } {
+					set usbSerial::receivedData [lrange $usbSerial::receivedData [expr {$index+1}] end]
 				} else {
 					set usbSerial::receivedData {}
 				}
-				set ::triggerCount [expr {[lindex $temp 0]*256 + [lindex $temp 1]}]
-				set ::bufferPtr [expr {[lindex $bufferTemp 0]*256 + [lindex $bufferTemp 1]}]
-				#puts "temp $temp"
-				puts "Trigger Count $::triggerCount"
-				puts "Buffer Ptr $::bufferPtr"
-			} else {
-				return
-			}
-		} "e" {
-			if {$responseLength >= 2} {
-				set usbSerial::eepromData [lindex $usbSerial::receivedData 1]
-				if {$responseLength > 2} {
-					set usbSerial::receivedData [lrange $usbSerial::receivedData 2 end]
-				} else {
-					set usbSerial::receivedData {}
+				#Error from instrument
+				puts "Error!"
+				foreach char $temp {
+					puts -nonewline [format %c $char ]
 				}
 			} else {
 				return
 			}
 		} "S" {
-			if {$responseLength >=5} {
-				set temp [lrange $usbSerial::receivedData 1 4]
-				if {$responseLength > 5} {
-					set usbSerial::receivedData [lrange $usbSerial::receivedData 5 end]
+			#Received scope state, display the state
+			if { [lsearch $usbSerial::receivedData 10] != -1} {
+				set index [lsearch $usbSerial::receivedData 10]
+				set temp [lrange $usbSerial::receivedData 0 $index]
+				if { $responseLength > [expr {$index + 1}] } {
+					set usbSerial::receivedData [lrange $usbSerial::receivedData [expr {$index+1}] end]
 				} else {
 					set usbSerial::receivedData {}
 				}
-				scope::stripChartSample $temp
-			} else {
-				return
-			}
-		} "s" {
-			#Strip chart buffer is empty
-			if {$responseLength >= 1} {
-				if {$responseLength > 1} {
-					set usbSerial::receivedData [lrange $usbSerial::receivedData 1 end]
-				} else {
-					set usbSerial::receivedData {}
-					#Only request a new sample if there is nothing else to process in this loop,
-					#otherwise requesting a sample will cause an infinite loop in this process because
-					#the fileevent will trigger immediately
-					scope::stripChartSample {}
-				}
-				#if {($timebase::timebaseMode == "scan")} {
-				#	sendCommand F
-				#} elseif {($timebase::timebaseMode == "strip")&&($scope::stripChartEnabled)} {
-				#	sendCommand F
-				#}
+				#State machine info from scope
+				#set temp [lindex $usbSerial::receivedData 1]
+				set temp $usbSerial::receivedData
+				puts "State is $temp"
 			} else {
 				return
 			}
 		} "I" {
-			if {$responseLength >=2} {
-				set temp [lrange $usbSerial::receivedData 0 1]
-				if {$responseLength > 2} {
+			#Received digital I/O input data, update display
+			if { $responseLength >= 2} {
+				puts "receivedData: $usbSerial::receivedData"
+				set temp [lindex $usbSerial::receivedData 1]
+				if { $responseLength > 2 } {
 					set usbSerial::receivedData [lrange $usbSerial::receivedData 2 end]
 				} else {
 					set usbSerial::receivedData {}
 				}
-				digio::updateDigIn [lindex $temp 1]
+				#State machine info from scope
+				::digio::updateDigIn $temp
 			} else {
 				return
 			}
-		} "W" {
-			if {$responseLength >=257} {
-				set waveformData [lrange $usbSerial::receivedData 1 256]
-				if {$responseLength > 257} {
-					set usbSerial::receivedData [lrange $usbSerial::receivedData 257 end]
+		} "O" {
+			#Received offset calibration info from the device
+			if { $responseLength >= 5} {
+				set temp [lrange $usbSerial::receivedData 1 4]
+				if { $responseLength > 5 } {
+					set usbSerial::receivedData [lrange $usbSerial::receivedData 6 end]
 				} else {
 					set usbSerial::receivedData {}
 				}
-				wave::updateDisplay $waveformData
+				#State machine info from scope
+				scope::restoreOffsetCal $temp
+			} else {
+				return
+			}
+		} "!" {
+			#Received an interrupt from the devicee
+			if { [lsearch $usbSerial::receivedData 10] != -1} {
+				set index [lsearch $usbSerial::receivedData 10]
+				set temp [lrange $usbSerial::receivedData 0 $index]
+				if { $responseLength > [expr {$index + 1}] } {
+					set usbSerial::receivedData [lrange $usbSerial::receivedData [expr {$index+1}] end]
+				} else {
+					set usbSerial::receivedData {}
+				}
+				#State machine info from scope
+				digio::setInt
 			} else {
 				return
 			}
@@ -478,12 +470,6 @@ proc ::usbSerial::processResponse {} {
 			set usbSerial::receivedData {}
 		}
 	}	
-	
-	incr ::statusState
-	if {$::statusState > 14} {
-		set ::statusState 0
-	}
-	.connection configure -image $::statusImage($::statusState)
 	
 	#If there is more data in the receive buffer, repeat this procedure
 	if { [llength $usbSerial::receivedData] > 0 } {
@@ -552,59 +538,110 @@ proc ::usbSerial::serialSettings {} {
 	grid .serial.ports -row 1 -column 0 -columnspan 2 -sticky we
 	grid columnconfigure .serial 0 -weight 1
 	grid columnconfigure .serial.ports 0 -weight 1
+	
+	#if {$osType == "windows"} {
 		
-	label .serial.ports.title	\
-		-text "Please Select A COM Port:"	\
-		-font {-weight bold -size -12}
+		label .serial.ports.title	\
+			-text "Please Select A COM Port:"	\
+			-font {-weight bold -size -12}
+			
+		radiobutton .serial.ports.showAvailable	\
+			-text "Show Available Ports"	\
+			-value showAvailable	\
+			-variable usbSerial::portShow	\
+			-command "usbSerial::updateValidPorts 1"
 		
-	radiobutton .serial.ports.showAvailable	\
-		-text "Show Available Ports"	\
-		-value showAvailable	\
-		-variable usbSerial::portShow	\
-		-command "usbSerial::updateValidPorts 1"
-	
-	radiobutton .serial.ports.showAll	\
-		-text "Show All Ports"	\
-		-value showAll	\
-		-variable usbSerial::portShow	\
-		-command "usbSerial::updateValidPorts 0"
-	
-	ttk::treeview .serial.ports.portList	\
-		-yscrollcommand {.serial.ports.portScroll set}	\
-		-columns "Description"	\
-		-selectmode browse
-	.serial.ports.portList column #0 -width 225
-	.serial.ports.portList column Description -width 400
-	
+		radiobutton .serial.ports.showAll	\
+			-text "Show All Ports"	\
+			-value showAll	\
+			-variable usbSerial::portShow	\
+			-command "usbSerial::updateValidPorts 0"
+		
+		ttk::treeview .serial.ports.portList	\
+			-yscrollcommand {.serial.ports.portScroll set}	\
+			-columns "Description"	\
+			-selectmode browse
+		.serial.ports.portList column #0 -width 225
+		.serial.ports.portList column Description -width 400
+		
 
-	if {$usbSerial::portShow == "showAvailable"} {
-		usbSerial::updateValidPorts 1
-	} else {
-		usbSerial::updateValidPorts 0
-	}
-
-	scrollbar .serial.ports.portScroll	\
-		-orient vertical	\
-		-command {.serial.ports.portList yview}
-		
-	button .serial.connect	\
-		-text "Connect"	\
-		-command {
-			destroy .serial
-			if {[usbSerial::openSerialPort]==1} {
-				set fileId [open port.cfg w]
-				puts $fileId $usbSerial::comNum
-				close $fileId
-			}
+		if {$usbSerial::portShow == "showAvailable"} {
+			usbSerial::updateValidPorts 1
+		} else {
+			usbSerial::updateValidPorts 0
 		}
+
+		scrollbar .serial.ports.portScroll	\
+			-orient vertical	\
+			-command {.serial.ports.portList yview}
+			
+		button .serial.connect	\
+			-text "Connect"	\
+			-command {
+				destroy .serial
+				if {[usbSerial::openSerialPort]==1} {
+					set fileId [open port.cfg w]
+					puts $fileId $usbSerial::comNum
+					close $fileId
+				}
+			}
+			
+		grid .serial.ports.title -row 0 -column 0 -sticky w -columnspan 3
+		grid .serial.ports.showAll -row 1 -column 0
+		grid .serial.ports.showAvailable -row 1 -column 1
+		grid .serial.ports.portList -row 2 -column 0 -columnspan 2 -sticky we
+		grid .serial.ports.portScroll -row 2 -column 2 -sticky ns
+		grid .serial.connect -row 3 -column 0 -columnspan 3
 		
-	grid .serial.ports.title -row 0 -column 0 -sticky w -columnspan 3
-	grid .serial.ports.showAll -row 1 -column 0
-	grid .serial.ports.showAvailable -row 1 -column 1
-	grid .serial.ports.portList -row 2 -column 0 -columnspan 2 -sticky we
-	grid .serial.ports.portScroll -row 2 -column 2 -sticky ns
-	grid .serial.connect -row 3 -column 0 -columnspan 3
-		
+			
+		#grid .serial.ports.autodetect -row 3 -column 0 -columnspan $i
+	#} elseif {$osType == "unix"} {
+	#	
+	#	#Create a list of valid port names
+	#	for {set i 0} {$i < 4} {incr i} {
+	#		lappend validPorts "/dev/ttyUSB$i"
+	#	}
+	#	
+	#	#Create buttons for these ports
+	#	for {set i 0} {$i < 4} {incr i} {
+	#		radiobutton .serial.ports.ttyButton$i	\
+	#			-text "/dev/ttyUSB$i"	\
+	#			-variable usbSerial::serialPort	\
+	#			-value "/dev/ttyUSB$i"	
+	#		grid .serial.ports.ttyButton$i -row [expr $i] -column 0
+	#	}
+	#	#Radio button and entry widgets so that the user
+	#	#can manually enter the name of a serial port
+	#	radiobutton .serial.ports.otherButton	\
+	#		-text "Other:"	\
+	#		-variable usbSerial::serialPort	\
+	#		-value other
+	#	grid .serial.ports.otherButton -row [expr $i+1] -column 0
+	#	entry .serial.ports.otherEntry	\
+	#		-textvariable otherPort
+	#	grid .serial.ports.otherEntry -row [expr $i+2] -column 0
+	#	
+	#} elseif {$osType == "Darwin"} {
+	#	set darwinPort [glob /dev/cu.*]
+	#	for {set i 0} {$i < [llength $darwinPort]} {incr i} {
+	#		radiobutton .serial.ports.cuButton$i	\
+	#			-text [lindex $darwinPort $i]	\
+	#			-variable usbSerial::serialPort	\
+	#			-value [lindex $darwinPort $i]
+	#		grid .serial.ports.cuButton$i -row $i -column 0
+	#	}
+	#	radiobutton .serial.ports.otherButton	\
+	#		-text "Other:"	\
+	#		-variable usbSerial::serialPort	\
+	#		-value other
+	#	incr i
+	#	grid .serial.ports.otherButton -row $i -column 0
+	#	entry .serial.ports.otherEntry	\
+	#		-textvariable otherPort
+	#	incr i
+	#	grid .serial.ports.otherEntry -row $i -column 0
+	#
+	#}
 	
 	#Center the serial port settings window over the parent
 	#See http://wiki.tcl.tk/534
@@ -689,9 +726,7 @@ proc usbSerial::autodetectWindows {} {
 				fileevent $portHandle readable {
 					set incomingData [gets $portHandle]
 					puts "incomingData: $incomingData"
-					if {   [lsearch $incomingData "Mini"] !=-1  } {
-						set serialCheck found
-					} elseif {[string match "*CGM101BOOT*" $incomingData]} {
+					if {   [lsearch $incomingData "CircuitGear"] !=-1  } {
 						set serialCheck found
 					} else {
 						puts "No match"
@@ -723,7 +758,7 @@ proc usbSerial::autodetectWindows {} {
 					tk_messageBox	\
 						-title "Auto-Detect Successful"	\
 						-default ok		\
-						-message "CGM-101 Found on COM$i"	\
+						-message "CGR-101 Found on COM$i"	\
 						-type ok			\
 						-icon info	\
 						-parent .auto
@@ -737,7 +772,7 @@ proc usbSerial::autodetectWindows {} {
 					close $fileId
 					destroy .auto
 					update
-					after 2000
+					after 750
 					usbSerial::openSerialPort
 					return 1
 				} else {
@@ -830,7 +865,7 @@ proc usbSerial::autodetectLinux {} {
 				fileevent $portHandle readable {
 					set incomingData [gets $portHandle]
 					puts "incomingData: $incomingData"
-					if {   [lsearch $incomingData "Mini"] !=-1  } {
+					if {   [lsearch $incomingData "CircuitGear"] !=-1  } {
 						set ::serialCheck found
 						puts "serialCheck $::serialCheck"
 					} else {
@@ -869,7 +904,7 @@ proc usbSerial::autodetectLinux {} {
 					tk_messageBox	\
 						-title "Auto-Detect Successful"	\
 						-default ok		\
-						-message "CGM-101 Found on $serialPort"	\
+						-message "CGR-101 Found on $serialPort"	\
 						-type ok			\
 						-icon info	\
 						-parent .auto
@@ -908,7 +943,6 @@ proc usbSerial::autodetectLinux {} {
 
 }
 
-#Based on www2.tcl.tk/1838
 proc usbSerial::winDetectPorts {} {
 
 	set result {}
@@ -948,37 +982,23 @@ proc usbSerial::winDetectPorts {} {
 	return $result
 }
 
+
 ## proc usbSerial::winDetectPorts {} {
  # 
- # ## 	set comList {}
- # 	catch {
- # 		set serialBase [join {
- # 			HKEY_LOCAL_MACHINE
- # 			HARDWARE
- # 			DEVICEMAP
- # 			SERIALCOMM} \\]
- # 		set values [registry values $serialBase]
- # 		foreach value $values {
- # 			lappend comList \\\\.\\[registry get $serialBase $value]
- # 		}
- # 	}
- #  ##
- # 
- # 
- # 	#set serialLog [exec EnumSer.exe]
+ # 	set serialLog [exec EnumSer.exe]
  # 	
  # 	#Find the start index of the com port list
- # 	#set startIndex [lsearch -all $serialLog "reports"]
- # 	#set startIndex [lindex $startIndex 4]
- # 	#incr startIndex
+ # 	set startIndex [lsearch -all $serialLog "reports"]
+ # 	set startIndex [lindex $startIndex 3]
+ # 	incr startIndex
  # 	
  # 	#Find the end index of the com port list
- # 	#set endIndex [lsearch -all $serialLog "Take"]
- # 	#set endIndex [lindex $endIndex 4]
- # 	#set endIndex [expr {$endIndex-1}]
+ # 	set endIndex [lsearch -all $serialLog "Take"]
+ # 	set endIndex [lindex $endIndex 3]
+ # 	set endIndex [expr {$endIndex-1}]
  # 	
  # 	#See if there are any com ports present
- # 	if {![llength $comList]} {
+ # 	if {($startIndex == $endIndex) || ($startIndex > $endIndex)} {
  # 		tk_messageBox	\
  # 			-message "No Com Ports Detected"	\
  # 			-default ok	\
@@ -1113,7 +1133,7 @@ proc usbSerial::updateValidPorts {detectPorts} {
 		
 		foreach port $validPorts {
 			set temp [list [lindex $port 1]]
-			if {[string first "ftdi-CM" [lindex $temp 0]] >= 0} {
+			if {[string first "ftdi-CG" [lindex $temp 0]] >= 0} {
 				set color "Dark Green"
 			} else {
 				set color "Orange"
@@ -1125,7 +1145,6 @@ proc usbSerial::updateValidPorts {detectPorts} {
 			.serial.ports.portList tag bind $portId <<TreeviewSelect>> {
 				update
 				set temp [.serial.ports.portList focus]
-				puts $temp
 				set usbSerial::comNum [string range $temp 3 end]
 				if {$usbSerial::comNum < 10} {
 					set usbSerial::serialPort "COM$usbSerial::comNum"

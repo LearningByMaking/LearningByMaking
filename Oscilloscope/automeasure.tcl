@@ -47,7 +47,6 @@ proc automeasure::showMeasurements {} {
 
 	#Check to see if the measurements window is already open
 	if {[winfo exists .measurements]} {
-		wm deiconify .measurements
 		raise .measurements
 		focus .measurements
 		return
@@ -265,11 +264,9 @@ proc automeasure::automeasure {} {
 proc automeasure::averages {} {
 	
 	set dataA [lindex $scope::scopeData 0]
-	#set verticalBox $scope::verticalBoxA
-	set verticalBox [vertical::getBoxSize A]
+	set verticalBox $scope::verticalBoxA
 	set dataB [lindex $scope::scopeData 1]
-	#set verticalBox $scope::verticalBoxB
-	set verticalBox [vertical::getBoxSize B]
+	set verticalBox $scope::verticalBoxB
 
 	#Calculate the average value of the waveforms
 	set averageA 0
@@ -283,10 +280,8 @@ proc automeasure::averages {} {
 	set averageA [expr {$averageA*1.0/$i}]
 	set averageB [expr {$averageB*1.0/$i}]
 	
-	#set automeasure::autoAverageA [cursor::formatAmplitude [scope::convertSample $averageA a]]
-	set automeasure::autoAverageA [cursor::formatAmplitude [vertical::convertSampleVoltage $averageA A]]
-	#set automeasure::autoAverageB [cursor::formatAmplitude [scope::convertSample $averageB b]]
-	set automeasure::autoAverageB [cursor::formatAmplitude [vertical::convertSampleVoltage $averageB B]]
+	set automeasure::autoAverageA [cursor::formatAmplitude [scope::convertSample $averageA a]]
+	set automeasure::autoAverageB [cursor::formatAmplitude [scope::convertSample $averageB b]]
 	
 	set automeasure::rawAverageA $averageA
 	set automeasure::rawAverageB $averageB
@@ -297,20 +292,17 @@ proc automeasure::average {src} {
 
 	if {$src == "A"} {
 		set data [lindex $scope::scopeData 0]
-		#set verticalBox $scope::verticalBoxA
-		set verticalBox [vertical::getBoxSize A]
+		set verticalBox $scope::verticalBoxA
 	} else {
 		set data [lindex $scope::scopeData 1]
-		#set verticalBox $scope::verticalBoxB
-		set verticalBox [vertiacl::getBoxSize B]
+		set verticalBox $scope::verticalBoxB
 	}
 	
 	#Calculate the average value of the waveform
 	set average 0
 	for {set i 0} {$i < 1024} {incr i} {
 		set temp [lindex $data $i]
-		#set voltage [scope::convertSample $temp $src]
-		set voltage [vertical::convertSampleVoltage $temp $src]
+		set voltage [scope::convertSample $temp $src]
 		set average [expr {$average+$voltage}]
 	}
 	set average [expr {$average/1024}]
@@ -398,12 +390,11 @@ proc automeasure::frequencies {} {
 		
 		#Determine the amount of time represented by the
 		#average  number of samples between average crossings
-		#set samplePeriod [expr {1.0/[scope::getSampleRate]}]
-		set samplePeriod [timebase::getSamplingPeriod]
+		set samplePeriod [expr {1.0/[scope::getSampleRate]}]
 		set periodA [expr {$betweenCrossingsA*$samplePeriod}]
 		set frequencyA [expr {1.0/$periodA}]
 		#Format the results for display
-		set frequencyA [cursor::formatFrequency $frequencyA 1]
+		set frequencyA [cursor::formatFrequency $frequencyA]
 		set periodA [cursor::formatTime $periodA]
 	} else {
 		set frequencyA "? Hz"
@@ -426,17 +417,18 @@ proc automeasure::frequencies {} {
 		
 		#Determine the amount of time represented by the
 		#average  number of samples between average crossings
-		#set samplePeriod [expr {1.0/[scope::getSampleRate]}]
-		set samplePeriod [timebase::getSamplingPeriod]
+		set samplePeriod [expr {1.0/[scope::getSampleRate]}]
 		set periodB [expr {$betweenCrossingsB*$samplePeriod}]
 		set frequencyB [expr {1.0/$periodB}]
 		#Format the results for display
-		set frequencyB [cursor::formatFrequency $frequencyB 1]
+		set frequencyB [cursor::formatFrequency $frequencyB]
 		set periodB [cursor::formatTime $periodB]
 	} else {
 		set frequencyB "? Hz"
 		set periodB "? s"
 	}
+			
+	
 	
 	set automeasure::autoFrequencyA $frequencyA
 	set automeasure::autoPeriodA $periodA
@@ -482,12 +474,11 @@ proc automeasure::frequency {src} {
 			
 		#Determine the amount of time represented by the
 		#average  number of samples between average crossings
-		#set samplePeriod [expr {1.0/[scope::getSampleRate]}]
-		set samplePeriod [timebase::getSamplingPeriod]
+		set samplePeriod [expr {1.0/[scope::getSampleRate]}]
 		set period [expr {$betweenCrossings*$samplePeriod}]
 		set frequency [expr {1.0/$period}]
 		#Format the results for display
-		set frequency [cursor::formatFrequency $frequency 1]
+		set frequency [cursor::formatFrequency $frequency]
 		set period [cursor::formatTime $period]
 	} else {
 		set frequency "? Hz"
@@ -508,20 +499,17 @@ proc automeasure::amplitude {src} {
 
 	if {$src == "A"} {
 		set data [lindex $scope::scopeData 0]
-		#set verticalBox $scope::verticalBoxA
-		set verticalBox [vertical::getBoxSize A]
+		set verticalBox $scope::verticalBoxA
 	} else {
 		set data [lindex $scope::scopeData 1]
-		#set verticalBox $scope::verticalBoxB
-		set verticalBox [vertical::getBoxSize B]
+		set verticalBox $scope::verticalBoxB
 	}
 	
 	#Calculate the average value of the waveform
 	set maximum -5000
 	set minimum 5000
 	foreach datum $data {
-		#set voltage [scope::convertSample $datum $src]
-		set voltage [vertical::convertSampleVoltage $datum $src]
+		set voltage [scope::convertSample $datum $src]
 		if {$voltage > $maximum} {
 			set maximum $voltage
 		}
@@ -576,8 +564,7 @@ proc automeasure::autoRMSVoltage {data src} {
 	for {set i $startSample} {$i <= $endSample} {incr i} {
 		set datum [lindex $data $i]
 		if {$src != "math"} {
-			#set datum [scope::convertSample $datum $src]
-			set datum [vertical::convertSampleVoltage $datum $src]
+			set datum [scope::convertSample $datum $src]
 		}
 		set sum [expr {$sum+($datum*$datum)}]
 	}
@@ -597,7 +584,7 @@ proc automeasure::autoRMSVoltage {data src} {
 
 }
 
-#automeasure::showMeasurements
+automeasure::showMeasurements
 .menubar.scopeView.viewMenu add separator
 .menubar.scopeView.viewMenu add command \
 	-label "Auto Measurements"	\

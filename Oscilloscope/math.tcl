@@ -92,11 +92,11 @@ proc math::showMath {} {
 		-borderwidth 2
 		
 	button .math.mag.zoomOut	\
-		-image $vertical::zoomOutImage	\
+		-image $scope::zoomOutImage	\
 		-command {math::adjustMath out}
 		
 	button .math.mag.zoomIn	\
-		-image $vertical::zoomInImage	\
+		-image $scope::zoomInImage	\
 		-command {math::adjustMath in}
 		
 	label .math.mag.sensitivity -image $math::mathImage
@@ -124,7 +124,7 @@ proc math::showMath {} {
 proc math::hideMath {} {
 	
 	#Get the path to the scope widgets
-	set scopePath [display::getDisplayPath]
+	set scopePath [getScopePath]
 	
 	$scopePath.display delete math
 	
@@ -147,18 +147,14 @@ proc math::updateMath {} {
 	}
 
 	#Get the path to the scope widgets
-	set scopePath [display::getDisplayPath]
+	set scopePath [getScopePath]
 
 	$scopePath.display delete math
 	
-	#set dataA [lindex $export::exportData 0]
-	set dataA [lindex $scope::scopeData 0]
-	#set dataB [lindex $export::exportData 1]
-	set dataB [lindex $scope::scopeData 1]
-	#set stepA [lindex $export::exportData 2]
-	set stepA [vertical::getStepSize A]
-	#set stepB [lindex $export::exportData 3]
-	set stepB [vertical::getStepSize B]
+	set dataA [lindex $export::exportData 0]
+	set dataB [lindex $export::exportData 1]
+	set stepA [lindex $export::exportData 2]
+	set stepB [lindex $export::exportData 3]
 	
 	set mathData {}
 	
@@ -167,10 +163,8 @@ proc math::updateMath {} {
 	
 	#Compute the real life voltage for the A/D readings
 	foreach datumA $dataA datumB $dataB {
-		#lappend voltageA [scope::convertSample $datumA A]
-		lappend voltageA [vertical::convertSampleVoltage $datumA A]
-		#lappend voltageB [scope::convertSample $datumB B]
-		lappend voltageB [vertical::convertSampleVoltage $datumB B]
+		lappend voltageA [scope::convertSample $datumA A]
+		lappend voltageB [scope::convertSample $datumB B]
 	}
 	
 	switch $math::mathMode {
@@ -189,67 +183,59 @@ proc math::updateMath {} {
 		}
 	}
 	
-	#Create list for screen points
-	set plotData {}
+	#Get the timebase setting from our list of settings
+	set timebaseSetting [lindex $scope::timebaseValues $scope::timebaseIndex]
 	
-	#Some pre-calculations to speed things up
-	set displayHeight [expr {$display::yAxisEnd-$display::yAxisStart}]
-	set samplePeriod [timebase::getSamplingPeriod]
-	
-	#Determine the spacing between samples
-	set displayTime [expr {10.0*$timebase::timebaseSetting}]
-	set pixelTime [expr {$displayTime/($display::xAxisEnd-$display::xAxisStart)}]
-	
-	set triggerSample 0
-		
+	#Calculate the Sampling Frequency
+	set sampleRate [lindex $scope::samplingRates $scope::timebaseIndex]
+	set sampleRate [expr {$scope::masterSampleRate/pow(2,$sampleRate)}]
+
 	#Determine the first sample that should appear on the screen
-	set firstSample 0
-	#Determine the last sample that should appear on the screen
-	set lastSample [expr {round(floor($display::xAxisEnd*1.0/$timebase::sampleIncrement*$pixelTime/$samplePeriod))}]
+	set firstSample [expr {1024-5-$cursor::sampleOffset-($cursor::timePos-$scope::xPlotStart)*($timebaseSetting*10*$sampleRate)/$scope::xPlotWidth}]
+	set firstSample [expr {round(ceil($firstSample))}]
+	#Determine the last sample that should be drawn on the screen
+	set lastSample [expr {1024-5-$cursor::sampleOffset-($cursor::timePos-$scope::xPlotEnd)*($timebaseSetting*10*$sampleRate)/$scope::xPlotWidth}]
+	set lastSample [expr {round(floor($lastSample))}]
 	
-	#If the timebase changes during plotting exit gracefully
-	if {($firstSample<0)||($lastSample>[llength $dataA])} {return}
+	#Calculate the first data point which should be on the left border
+	set x1 [expr {$cursor::timePos-($scope::xPlotWidth/($timebaseSetting*10))*((1024-$cursor::sampleOffset-5-($firstSample-1))/$sampleRate)}]
+	set x2 [expr {$cursor::timePos-($scope::xPlotWidth/($timebaseSetting*10))*((1024-$cursor::sampleOffset-5-$firstSample)/$sampleRate)}]
 	
-	#Convert the bulk of the samples to screen coordinates
-	for {set i $firstSample} {$i < $lastSample} {incr i} {
+	#Calculate the left border point
+	set temp [lindex $mathData [expr {$firstSample-1}]]
+	set y1 [expr {$scope::yPlotHeight/2.0+$scope::yBorder-$temp/($math::verticalBoxM*5)*$scope::yPlotHeight/2}]
+	set temp [lindex $mathData $firstSample]
+	set y2 [expr {$scope::yPlotHeight/2.0+$scope::yBorder-$temp/($math::verticalBoxM*5)*$scope::yPlotHeight/2}]
+	set m [expr {($y1-$y2)/($x1-$x2)}]
+	set b [expr {$y1-$m*$x1}]
+	set yf [expr {$m*$scope::xPlotStart+$b}]
 	
-		set x [expr {$display::xAxisStart+($i-$triggerSample)*$timebase::sampleIncrement*[timebase::getSamplingPeriod]/$pixelTime}]
-			
-		if {($x >= $display::xAxisStart) &&  ($x < $display::xAxisEnd)} {
-			set y [expr {$displayHeight/2.0+$display::yAxisStart-$displayHeight*([lindex $mathData $i]/(10*$math::verticalBoxM))}]
-			lappend plotData $x
-			lappend plotData $y
-		}
+	set plotData {}
+	lappend plotData $scope::xPlotStart
+	lappend plotData $yf
+	lappend plotData $x2
+	lappend plotData $y2
+	
+	for {set i [expr {$firstSample+1}]} {$i < $lastSample} {incr i} {
+		set xDatum [expr {$::cursor::timePos- ($scope::xPlotWidth/($timebaseSetting*10))*((1024-$::cursor::sampleOffset-5-$i)/$sampleRate)}]	
+		set yDatum [lindex $mathData $i]
+		set y [expr {$scope::yPlotHeight/2.0+$scope::yBorder-$yDatum/($math::verticalBoxM*5)*$scope::yPlotHeight/2}]
+		lappend plotData $xDatum $y
 	}
 	
-	#Straight-line interpolation to determine the position of the last samples on the right border of the display
-	if {[expr $lastSample+1] < [llength $dataA]} {
-		#Calculate the last point that should appear on the right border
-		set x1 [lindex $plotData end-1]
-		set x2 [expr {($lastSample+1)*$timebase::sampleIncrement*$samplePeriod/$pixelTime}]
-		
-		#Calculate the border point for the math channel
-		set y1 [lindex $plotData end]
-		set voltage [lindex $mathData [expr {$lastSample+1}]]
-		set y2 [expr {$displayHeight/2.0+$display::yAxisStart-$displayHeight*($voltage/(10*$math::verticalBoxM))}]
-		
-		set m [expr {($y1-$y2)/($x1-$x2)}]
-		set b [expr {$y1-$m*$x1}]
-		set yf [expr {$m*$display::xAxisEnd+$b}]
-		
-		#Add the last point to the list for Channel A
-		lappend plotData $display::xAxisEnd
-		lappend plotData $yf
-		
-	} else {
-		#The last sample is on the border
-		set x $display::xAxisEnd
-		set y [expr {$displayHeight/2.0+$display::yAxisStart-$displayHeight*([lindex $mathData $lastSample]/(10*$math::verticalBoxM))}]
-		lappend plotDataA $x
-		lappend plotDataA $y
-	}
+	#Calculate the last point that should appear on the right border
+	set x1 [lindex $plotData end-1]
+	set x2 [expr {$cursor::timePos-($scope::xPlotWidth/($timebaseSetting*10))*((1024-$cursor::sampleOffset-5-($lastSample+1))/$sampleRate)}]
 	
-	
+	#Calculate the last point for channel A
+	set y1 [lindex $plotData end]
+	set temp [lindex $mathData [expr {$lastSample+1}]]
+	set y2 [expr {$scope::yPlotHeight/2.0+$scope::yBorder-$temp/($math::verticalBoxM*5)*$scope::yPlotHeight/2}]
+	set m [expr {($y1-$y2)/($x1-$x2)}]
+	set b [expr {$y1-$m*$x1}]
+	set yl [expr {$m*$scope::xPlotEnd+$b}]
+	lappend plotData $scope::xPlotEnd
+	lappend plotData $yl
 	
 	$scopePath.display create line	\
 		$plotData		\

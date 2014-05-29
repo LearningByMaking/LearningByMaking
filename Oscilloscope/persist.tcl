@@ -35,7 +35,7 @@ namespace eval persist {
 proc persist::updatePersist {plotDataA plotDataB} {
 
 	if {$persist::levelsOfPersistence == "Off"} {
-		set scopePath [display::getDisplayPath]
+		set scopePath [getScopePath]
 		$scopePath.display delete persistA
 		$scopePath.display delete persistB
 		return
@@ -61,19 +61,19 @@ proc persist::updatePersist {plotDataA plotDataB} {
 
 proc persist::plotPersist {} {
 
-	set scopePath [display::getDisplayPath]
+	set scopePath [getScopePath]
 
 	if {$persist::levelsOfPersistence != "infinite"} {
 		$scopePath.display delete persistA
 		$scopePath.display delete persistB
 	}
 	
-	if {$vertical::enableA} {
+	if {$scope::enableA} {
 		set i 15
 		foreach oldWaveform $persist::chA {
 			set hexColor [format %x $i]
 			if {$persist::levelsOfPersistence == "infinite"} {
-				set fillColor $display::channelAColor
+				set fillColor $scope::waveColorA
 			} else {
 				set fillColor "#FF$hexColor$hexColor$hexColor$hexColor"
 			}
@@ -87,12 +87,12 @@ proc persist::plotPersist {} {
 		}
 	}
 
-	if {$vertical::enableB} {
+	if {$scope::enableB} {
 		set i 15
 		foreach oldWaveform $persist::chB {
 			set hexColor [format %x $i]
 			if {$persist::levelsOfPersistence == "infinite"} {
-				set traceColor $display::channelBColor
+				set traceColor $scope::waveColorB
 			} else {
 				set traceColor "#00" 
 				append traceColor $hexColor $hexColor "FF"
@@ -112,7 +112,7 @@ proc persist::plotPersist {} {
 
 proc persist::changeLevels {} {
 
-	set scopePath [display::getDisplayPath]
+	set scopePath [getScopePath]
 	$scopePath.display delete persistA
 	$scopePath.display delete persistB
 	set persist::chA {}
@@ -152,3 +152,7 @@ menu .menubar.scopeView.persist -tearoff 0
 .menubar.scopeView.viewMenu add cascade	\
 	-menu .menubar.scopeView.persist		\
 	-label "Digital Persistence"
+
+
+
+

@@ -1040,7 +1040,7 @@ proc waveMaker::saveData { } {
 			puts "offset $offset, Map max to 255, sample $sample"
 			error "Sample value $sample is out of range"
 		    }
-		    puts $f [expr {255-$sample}]
+		    puts $f $sample
 		}
 	    } else {
 		# Map min to 0. This will happen if, for
@@ -1054,7 +1054,7 @@ proc waveMaker::saveData { } {
 			puts "offset $offset, Map max to 255, sample $sample"
 			error "Sample value $sample is out of range"
 		    }
-		    puts $f [expr {255-$sample}]
+		    puts $f $sample
 		}
 	    }
 	} else {
@@ -1062,7 +1062,7 @@ proc waveMaker::saveData { } {
 	    foreach offset $offsets {
 		set sample [expr {int(round(($offset - $min) \
 						* 255 / ($max - $min)))}]
-		puts $f [expr {255-$sample}]
+		puts $f $sample
 	    }
 	}
 	close $f

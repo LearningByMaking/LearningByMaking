@@ -24,10 +24,10 @@
 namespace eval net {
 
 #Frequency Parameters
-set startFrequency 0.2
-set endFrequency 200000
+set startFrequency 0.1
+set endFrequency 20000000
 set startValuePow -1
-set endValuePow [expr {log10(2E5)}]
+set endValuePow [expr {log10(2E6)}]
 set frequencyLogStep 1.1
 set frequencyLinStep 100
 set frequencyStepMode "log"
@@ -82,20 +82,26 @@ set scientificNotation 1
 
 set phaseOffset 180
 
+set resonantEnable 0
+
 }
 
 proc net::toggleOpMode {} {
 
 	if {$::opMode == "Netalyzer"} {
-		grid forget .scope
-		
-		set trigger::triggerMode "Single-Shot"
-		trigger::selectTriggerMode
-		trigger::manualTrigger
-		
+		grid forget [getScopePath]
+		grid forget [getWavePath]
+		if {[winfo exists .dFloat]} {
+			set digio::state docked
+			digio::floatDigio
+		}
+		grid forget [getDigioPath]
+		set scope::triggerMode "Single-Shot"
+		scope::selectTriggerMode
 		#Remove the scope view menu
 		grid remove .menubar.scopeView
 		net::buildNetalyzer
+		
 		
 	} else {
 		set net::analyzeEnable 0
@@ -107,14 +113,12 @@ proc net::toggleOpMode {} {
 		#Find the "Clear plots command in the view menu and remove it"
 		#set temp [.menubar.view.viewmenu index "Clear Bode Plots"]
 		#.menubar.view.viewmenu delete $temp
-		set trigger::triggerMode "Auto"
-		trigger::selectTriggerMode
-		
-		grid .scope -row 1 -column 0
-		
-		vertical::updateVertical
-		timebase::adjustTimebase update
-
+		set scope::triggerMode "Auto"
+		scope::selectTriggerMode
+		arrangeCircuitGear
+		scope::adjustVertical a update
+		scope::adjustVertical b update
+		scope::adjustTimebase update
 		destroy .menubar.netView
 		grid .menubar.scopeView -row 0 -column 1
 	}
@@ -125,11 +129,7 @@ proc net::toggleOpMode {} {
 proc net::buildNetalyzer {} {
 	global osType
 
-	labelframe .net	\
-		-relief groove	\
-		-borderwidth 2	\
-		-text "Network Analyser"	\
-		-font {-weight bold -size -12}
+	frame .net
 	
 	frame .net.controls
 	
@@ -170,7 +170,7 @@ proc net::buildNetalyzer {} {
 	scale .net.controls.inputs.endFrequency	\
 		-length 200		\
 		-from 0		\
-		-to 5.30103		\
+		-to 6.31			\
 		-orient horizontal	\
 		-command {net::clearPlots;net::updateEndValue}	\
 		-variable net::endValuePow	\
@@ -425,7 +425,7 @@ proc net::buildNetalyzer {} {
 	
 	net::drawXScale
 
-	#Pop up window for selecting phsae offset
+	#Pop up window for selecting phase offset
 	menu .net.graphs.phase.popup -tearoff 0
 	.net.graphs.phase.popup add radiobutton	\
 		-label "Phase Axis: \[+360,0\]"	\
@@ -453,6 +453,14 @@ proc net::buildNetalyzer {} {
 		-value 0	\
 		-command {net::yScale phase}
 	bind .net.graphs.phase <Button-3> {+tk_popup .net.graphs.phase.popup %X %Y}
+
+	#Pop-up Menu for magnitue plot
+	menu .net.graphs.mag.popup -tearoff 0
+	.net.graphs.mag.popup add checkbutton	\
+		-label "Peak Detection"	\
+		-variable net::resonantEnable	\
+		-command net::findResonantPeak
+	bind .net.graphs.mag <Button-3> {+tk_popup .net.graphs.mag.popup %X %Y}
 
 }
 
@@ -521,11 +529,13 @@ proc net::drawXScale {} {
 				.net.graphs.mag create line \
 					$currentX $net::topBorder		\
 					$currentX [expr {$net::plotHeight+$net::topBorder + 3}]	\
-					-tag xScaleTag
+					-tag xScaleTag	\
+					-fill grey
 				.net.graphs.phase create line	\
 					$currentX $net::topBorder	\
 					$currentX [expr {$net::plotHeight+$net::topBorder+3}]	\
-					-tag xScaleTag
+					-tag xScaleTag	\
+					-fill grey
 			}
 		}
 	
@@ -603,16 +613,16 @@ proc net::analyze {} {
 	set net::quality {}
 	
 	#Set up for analysis - set preamps to high scale
-	set vertical::verticalIndexA 6
+	set scope::verticalIndexA 6
 	set net::chAScale "25V Max"
-	vertical::adjustVertical .scope.verticalA A same
+	scope::adjustVertical a same
 
-	set vertical::verticalIndexB 6
+	set scope::verticalIndexB 6
 	set net::chBScale "25V Max"
-	vertical::adjustVertical .scope.verticalB B same
+	scope::adjustVertical b same
 	
 	#Make sure we're using a sine wave for analysis
-	sendCommand "WW0"
+	wave::programWaveform sine.dat
 	
 	#Set the output of the waveform generator
 	set wave::amplitude $net::maxAmplitude
@@ -667,7 +677,7 @@ proc net::analyze {} {
 		puts "Testing at $currentFrequency Hz"
 		
 		#Update the display
-		set net::currentFrequency [cursor::formatFrequency $currentFrequency 1]
+		set net::currentFrequency [cursor::formatFrequency $currentFrequency]
 		
 		#Perform the analysis at this frequency
 		set temp [net::analyzeFrequency $currentFrequency]
@@ -699,78 +709,37 @@ proc net::analyze {} {
 
 proc net::adjustSampleRate {freq} {
 
-	if {$freq >= 5030} {
-		#Sample rate = 2 MHz
-		#Sample time = 1024/2000000 = 512 us
-		#Maximum frequency = 1.95313 kHz+
+	if {$freq >= 97656} {
+		set sampleRate 0
+	} elseif {$freq >= 48828} {
 		set sampleRate 1
-	} elseif {$freq >= 2030} {
-		#Sample rate = 500 kHz
-		#Sample time = 1024/500000 = 2.048 ms
-		#Maximum frequency = 488.28Hz
-		set sampleRate 1
-	} elseif {$freq >= 1040} {
-		#Sample rate = 250 kHz
-		#Sample time = 1024/250000 = 4.096 ms
-		#Maximum frequency = 244.14Hz
+	} elseif {$freq >= 24414} {
 		set sampleRate 2
-	} elseif {$freq >= 508} {
-		#Sample rate = 125 kHz
-		#Sample time = 1024/125000 = 8.192 ms
-		#Maximum frequency = 122.07Hz
-		set sampleRate 3
-	} elseif { $freq >= 214} {
-		#Sample rate = 62.5 kHz
-		#Sample time = 1024/62500 = 16.384 ms
-		#Maximum frequency = 61.035Hz
+	} elseif {$freq >= 6103} {
+		set sampleRate 4
+	} elseif {$freq >= 3051} {
 		set sampleRate 5
-	} elseif {$freq >= 104} {
-		#Sample rate = 51.2 kHz
-		#Sample time = 1024/51200 = 20 ms
-		#Maximum frequency = 50.0Hz
+	} elseif {$freq >= 1525} {
 		set sampleRate 6
-	} elseif {$freq >= 51.2} {
-		#Sample rate = 25.6 kHz
-		#Sample time = 1024/25600 = 40 ms
-		#Maximum frequency = 25.0Hz
+	} elseif { $freq >= 762} {
 		set sampleRate 7
-	} elseif {$freq >=20.6} {
-		#Sample rate = 10.24 kHz
-		#Sample time = 1024/10240 = 100 ms
-		#Maximum frequency = 10.0Hz
+	} elseif {$freq >= 381} {
 		set sampleRate 8
-	} elseif {$freq >=10.4} {
-		#Sample rate = 5.12 kHz
-		#Sample time = 1024/5120 = 200 ms
-		#Maximum frequency = 5.0Hz
+	} elseif {$freq >= 190} {
 		set sampleRate 9
-	} elseif {$freq >=5.2} {
-		#Sample rate = 2.56 kHz
-		#Sample time = 1024/2560 = 400 ms
-		#Maximum frequency = 2.5Hz
-		set sampleRate A
-	} elseif {$freq >= 2.1} {
-		#Sample rate = 1024 Hz
-		#Sample time = 1024/1024 = 1 second
-		#Maximum frequency = 1.0Hz
-		set sampleRate B
+	} elseif {$freq >=95} {
+		set sampleRate 10
+	} elseif {$freq >=47} {
+		set sampleRate 11
+	} elseif {$freq >=23} {
+		set sampleRate 12
+	} elseif {$freq >= 5} {
+		set sampleRate 14
 	} else {
-		#Sample rate = 512Hz
-		#Sample time = 1024/512 = 2 seconds
-		#Maximum frequency = 1/2 = 0.5Hz
-		return C
+		set sampleRate 15
 	}
 	
-	#Find the timebase index that corresponds to the correct sample rate
-	set timebaseIndex 0
-	foreach timebaseSetting $timebase::validTimebases {
-		if {[lindex $timebaseSetting 1] == $sampleRate} {
-			set timebase::newTimebaseIndex $timebaseIndex
-			timebase::adjustTimebase update
-			return
-		}
-		incr timebaseIndex
-	}
+	return $sampleRate
 
 }
 
@@ -778,7 +747,7 @@ proc net::createSineRef {freq} {
 
 	set net::sineRef {}
 	
-	set tStep [expr {1.0/[timebase::getSamplingRate]}]
+	set tStep [expr {1.0/[scope::getSampleRate]}]
 	
 	for {set i 0} {$i < 1024} {incr i} {
 		set t [expr {$i*$tStep}]
@@ -792,7 +761,7 @@ proc net::createCosRef {freq} {
 
 	set net::cosRef {}
 	
-	set tStep [expr {1.0/[timebase::getSamplingRate]}]
+	set tStep [expr {1.0/[scope::getSampleRate]}]
 	
 	for {set i 0} {$i < 1024} {incr i} {
 		set t [expr {$i*$tStep}]
@@ -833,7 +802,7 @@ proc net::findMinMax {data} {
 	set length [llength $data]
 	set length [expr {$length - 1}]
 	set maximum 0
-	set minimum 2047
+	set minimum 1023
 	for {set i 0} {$i < $length} {incr i} {
 		set datum [lindex $data $i]
 		#set datum [expr {$datum - $average}]
@@ -868,14 +837,12 @@ proc net::analyzeFrequency { freq } {
 	#Set the output frequency of the generator
 	wave::sendFrequency $freq
 	
-	#Set the sample rate to match the output frequency
-	net::adjustSampleRate $freq
+	#Make sure we capture 1023 samples after the trigger
+	sendCommand "S C 3 255"
 	
-	#Enable AC coupling for both channels
-	set vertical::couplingA AC
-	vertical::updateCoupling .scope.verticalA A
-	set vertical::couplingB AC
-	vertical::updateCoupling .scope.verticalB B
+	#Set the sample rate to match the output frequency
+	set scope::timebaseIndex [lsearch $scope::samplingRates [net::adjustSampleRate $freq]]
+	scope::updateScopeControlReg
 	
 	#Create the reference sine wave for this frequency
 	net::createSineRef $freq
@@ -909,9 +876,15 @@ proc net::analyzeFrequency { freq } {
 		#The trigger level has to be updated on each pass because the hardware offset
 		#values are specific to the range setting of the preamp and this range can change
 		#during the recursion.
-		set cursor::trigPos [expr {($display::yAxisEnd-$display::yAxisStart)/2.0+$display::yAxisStart}]
-		set trigger::triggerVoltage 0.0
-		trigger::updateTriggerLevel
+		if {$scope::verticalIndexA < 4} {
+			set offset $scope::offsetA2
+		} else {
+			set offset $scope::offsetA1
+		}
+		set triggerLevel [expr {511-$offset}]
+		set byteHigh [expr {round(floor($triggerLevel/pow(2,8)))}]
+		set byteLow [expr {$triggerLevel%round(pow(2,8))}]
+		sendCommand "S T $byteHigh $byteLow"
 	
 		set captureOK [net::analysisRecursion $freq]
 		incr numIterations
@@ -922,11 +895,11 @@ proc net::analyzeFrequency { freq } {
 	#Retrieve data from scope and convert it
 	set dataA {}
 	foreach datum [lindex $scope::scopeData 0] {
-		lappend dataA [vertical::convertSampleVoltage $datum A]
+		lappend dataA [scope::convertSample $datum a]
 	}
 	set dataB {}
 	foreach datum [lindex $scope::scopeData 1] {
-		lappend dataB [vertical::convertSampleVoltage $datum B]
+		lappend dataB [scope::convertSample $datum b]
 	}
 	
 	#Components for Channel A
@@ -940,6 +913,7 @@ proc net::analyzeFrequency { freq } {
 	set magA [expr {(2.0)*sqrt(pow($iPhaseA,2)+pow($qPhaseA,2))}]
 	
 	#Calculate phase
+	#set radA [expr {atan($qPhaseA/$iPhaseA)}]
 	set radA [expr {atan2($qPhaseA,$iPhaseA)}]
 	set degA [expr {$radA/$net::pi*180.0}]
 
@@ -980,15 +954,15 @@ proc net::analysisRecursion {freq} {
 
 	#Acquire the waveform
 	scope::acquireWaveform
-	set netTimeout [after 5000 {set scope::scopeData -1}]
-	vwait scope::scopeData
+	set netTimeout [after 5000 {set export::exportData -1}]
+	vwait export::exportData
 	
 	#Check to see if the acquisition was successful
-	if {$scope::scopeData == -1} {
+	if {$export::exportData == -1} {
 		if {!$net::analyzeEnable} {return}
 		tk_messageBox		\
 			-title "Analyzer Error"	\
-			-message "Input signal was not detected.\nPlease ensure that the waveform generator and channel A of\nthe oscilloscope are connected to the input of the circuit under test.\nConnect channel B to the output of your circuit."	\
+			-message "Input signal was not detected.\nPlease ensure that the waveform generator and channel A of\nthe oscilloscope are connected to the input of the circuit under test."	\
 			-type ok	\
 			-icon warning
 		set net::analyzeEnable 0
@@ -1017,20 +991,20 @@ proc net::analysisRecursion {freq} {
 	puts "A: min $minimum max $maximum average $average sigAmp $sigAmplitudeA"
 	
 	#Check to see if we need to change the preamp on channel A
-	if {$sigAmplitudeA < 106 && ($vertical::verticalIndexA == 6)&&($average > 852 && $average<1196)} {
-		set vertical::verticalIndexA 3
+	if {$sigAmplitudeA < 53 && ($scope::verticalIndexA == 6)&&($average > 426 && $average<598)} {
+		set scope::verticalIndexA 3
 		set net::chAScale "2.5V Max"
-		vertical::adjustVertical .scope.verticalA A same
+		scope::adjustVertical a same
 		puts "Adjusting Channel A preamp to 2.5V scale."
 		return 0
 	} 
-	if {($maximum > 2000 || $minimum < 28) && ($vertical::verticalIndexA == 3) } {
-		set vertical::verticalIndexA 6
+	if {($maximum > 1000 || $minimum < 28) && ($scope::verticalIndexA == 3) } {
+		set scope::verticalIndexA 6
 		set net::chAScale "25V Max"
-		vertical::adjustVertical .scope.verticalA A same
+		scope::adjustVertical a same
 		puts "Adjusting Channel A preamp to 25V scale."
 		return 0
-	} elseif {$maximum > 2000} {
+	} elseif {$maximum > 1000} {
 		puts "Input signal is too large!"
 		return 0
 	}
@@ -1044,13 +1018,13 @@ proc net::analysisRecursion {freq} {
 	puts "B: min $minimum max $maximum average $average sigAmp $sigAmplitudeB"
 	
 	#Check to see if we need to change the preamp on channel B
-	if {$sigAmplitudeB < 106 && ($vertical::verticalIndexB == 6)&&($average > 852 && $average<1196)} {
-		set vertical::verticalIndexB 3
+	if {$sigAmplitudeB < 53 && ($scope::verticalIndexB == 6)&&($average > 426 && $average<598)} {
+		set scope::verticalIndexB 3
 		set net::chBScale "2.5V Max"
-		vertical::adjustVertical .scope.verticalB B same
+		scope::adjustVertical b same
 		puts "Adjusting Channel B preamp to 2.5V scale."
 		return 0
-	} elseif {$sigAmplitudeB < 106 && $wave::amplitude < $net::maxAmplitude} {
+	} elseif {$sigAmplitudeB < 53 && $wave::amplitude < $net::maxAmplitude} {
 		#Increase the waveform amplitude
 		set temp $wave::amplitude
 		set temp [expr {round($temp*1.1)}]
@@ -1061,12 +1035,12 @@ proc net::analysisRecursion {freq} {
 		return 0
 	}
 	
-	if {($maximum > 2000 || $minimum < 56) && ($vertical::verticalIndexB == 3)} {
-		set vertical::verticalIndexB 6
+	if {($maximum > 1000 || $minimum < 28) && ($scope::verticalIndexB == 3)} {
+		set scope::verticalIndexB 6
 		set net::chBScale "25V Max"
-		vertical::adjustVertical .scope.verticalB B same
+		scope::adjustVertical b same
 		return 0
-	} elseif {($maximum > 2000 || $minimum < 56)  && $wave::amplitude > 1} {
+	} elseif {($maximum > 1000 || $minimum < 28)  && $wave::amplitude > 1} {
 		#Decrease the waveform amplitude
 		set temp $wave::amplitude
 		set temp [expr {round($temp*0.9)}]
@@ -1124,8 +1098,11 @@ proc net::plotMag {} {
 				-width 2	\
 				-dash .
 		}
-
-
+	}
+	
+	.net.graphs.mag delete resonantTag
+	if {$net::resonantEnable} {
+		net::findResonantPeak
 	}
 
 }
@@ -1438,10 +1415,11 @@ proc net::updateScopeDisplay {} {
 	#Plot channel A waveform
 	set plotData {}
 	for {set i 0} {$i < 1024} {incr i} {
-		lappend plotData [expr {$i/4.0}]
+		#lappend plotData [expr {$i/(1024/$net::scopePlotWidth)}]
+		lappend plotData $i
 		set datum [lindex $dataA $i]
 		set datum [expr {$datum-$averageA}]
-		lappend plotData [expr {$net::scopePlotHeight/2+$datum/(2047/$net::scopePlotHeight)}]
+		lappend plotData [expr {$net::scopePlotHeight/2+$datum/(1024/$net::scopePlotHeight)}]
 	}
 	.net.scope.display create line	\
 		$plotData	\
@@ -1451,10 +1429,11 @@ proc net::updateScopeDisplay {} {
 	#Plot channel B waveform
 	set plotData {}
 	for {set i 0} {$i < 1024} {incr i} {
-		lappend plotData [expr {$i/4.0}]
+		#lappend plotData [expr {$i/(1024/$net::scopePlotWidth)}]
+		lappend plotData $i
 		set datum [lindex $dataB $i]
 		set datum [expr {$datum-$averageB}]
-		lappend plotData [expr {$net::scopePlotHeight/2+$datum/(2047/$net::scopePlotHeight)}]
+		lappend plotData [expr {$net::scopePlotHeight/2+$datum/(1024/$net::scopePlotHeight)}]
 	}
 	.net.scope.display create line	\
 		$plotData	\
@@ -1512,7 +1491,7 @@ proc net::setStartFrequency {} {
 		tk_messageBox	\
 			-title "Invalid Frequency"	\
 			-default ok		\
-			-message "Frequency must be a number\nbetween 1 Hz and 200 kHz."	\
+			-message "Frequency must be a number\nbetween 1 Hz and 2 MHz."	\
 			-type ok			\
 			-icon warning
 	}
@@ -1529,7 +1508,7 @@ proc net::setEndFrequency {} {
 	
 	#Make sure that we got a valid frequency setting
 	if { [string is double -strict $newFreq] } {
-		if { $newFreq >= $net::startFrequency && $newFreq <= 200000} {
+		if { $newFreq >= $net::startFrequency && $newFreq <= 2000000} {
 			set net::endValuePow [expr {log10($newFreq)}]
 			set net::endFrequency [format %.1f $newFreq]
 			net::clearPlots
@@ -1538,7 +1517,7 @@ proc net::setEndFrequency {} {
 			tk_messageBox	\
 			-title "Invalid Frequency"	\
 			-default ok		\
-			-message "Frequency out of range.  End frequency must be less than 200kHz frequency\nand greater than the starting frequency."	\
+			-message "Frequency out of range.  Start frequency must be less than end frequency\nand greater than 1 Hz."	\
 			-type ok			\
 			-icon warning
 		}
@@ -1546,7 +1525,7 @@ proc net::setEndFrequency {} {
 		tk_messageBox	\
 			-title "Invalid Frequency"	\
 			-default ok		\
-			-message "Frequency must be a number\nbetween 1 Hz and 200 kHz."	\
+			-message "Frequency must be a number\nbetween 1 Hz and 2 MHz."	\
 			-type ok			\
 			-icon warning
 	}
@@ -1783,5 +1762,71 @@ proc net::updatePhaseCursor {xCoord yCoord} {
 		-fill red	\
 		-anchor $anchorPos	\
 		-tag phaseCursor
+
+}
+
+proc net::findResonantPeak {} {
+
+	if {!$net::resonantEnable} {
+		.net.graphs.mag delete resonantTag
+		return
+	}
+
+	set y $net::yMag
+
+	set length [llength $y]
+	if {$length < 2} {return}
+	
+	.net.graphs.mag delete resonantTag
+
+	set max [lindex $y 0]
+	set maxIndex 0
+	set currentIndex 0
+	foreach magPoint $y {
+		if {$magPoint > $max} {
+			set maxIndex $currentIndex
+			set max $magPoint
+		}
+		incr currentIndex
+	}
+	
+	set peakMagnitude [format "%.3f" $max]
+	append peakMagnitude "dB"
+	
+	set peakFrequency [lindex $net::xFreq $maxIndex]
+	if {$peakFrequency > 1E6} {
+		set freqText [format "%3.3f" [expr $peakFrequency/1E6]]
+		append freqText "M"
+	} elseif { $peakFrequency > 1E3} {
+		set freqText [format "%3.3f" [expr $peakFrequency/1E3]]
+		append freqText "k"
+	} else {
+		set freqText [format "%3.3f" $peakFrequency]
+	}
+	append freqText "Hz"
+	
+	set peakText "Peak\n$peakMagnitude\n$freqText"
+
+	#Determine how many ticks to display
+	set ticks [expr {($net::topTick-$net::botTick)/20}]
+	set magMajorTick [expr {$net::plotHeight/$ticks}]
+	
+	.net.graphs.mag create text 	\
+		[lindex $net::xValues $maxIndex] [expr {$net::topBorder+($net::topTick-$max)/20*($magMajorTick)-35}]	\
+		-text $peakText	\
+		-font {-size -15 -weight bold}	\
+		-fill blue	\
+		-anchor center	\
+		-justify center	\
+		-tag resonantTag
+
+	.net.graphs.mag create line	\
+		[expr {[lindex $net::xValues $maxIndex]-10}] [expr {$net::topBorder+($net::topTick-$max)/20*($magMajorTick)-10}]	\
+		[expr {[lindex $net::xValues $maxIndex]}] [expr {$net::topBorder+($net::topTick-$max)/20*($magMajorTick)}]	\
+		[expr {[lindex $net::xValues $maxIndex]+10}] [expr {$net::topBorder+($net::topTick-$max)/20*($magMajorTick)-10}]	\
+		-tag resonantTag	\
+		-fill blue	\
+		-width 2
+	
 
 }

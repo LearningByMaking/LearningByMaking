@@ -5,13 +5,13 @@ package require Img
 namespace eval wave {
 
 #---=== Waveform Global Variables ===---
-set minFrequencyLimit 0.2
-set maxFrequencyLimit 200000
-set minFrequency 0.2
-set maxFrequency 200000
-set sliderRange 310
-set ampSliderLength 335
-set ddsResolution 0.2119
+set minFrequencyLimit 0.1
+set maxFrequencyLimit 3000000
+set minFrequency 0.1
+set maxFrequency 3000000
+set sliderRange 350
+set ampSliderLength 395
+set ddsResolution 0.09313225746
 set defaultFrequency 1000.0
 set frequencyDisplay $defaultFrequency
 set waveFrequency $defaultFrequency
@@ -20,14 +20,11 @@ set waveFile "sine.dat"
 #Waveform Images:
 set freqImage [image create photo -file "$images/freqImage.gif"]
 set ampImage [image create photo -file "$images/ampImage.gif"]
-set offImage [image create photo -file "$images/offImage.gif"]
 
 #---=== Export Public Procedures ===---
 namespace export buildWave
 namespace export setWavePath
 namespace export getWavePath
-
-set currentWaveform "sine"
 
 }
 
@@ -35,15 +32,7 @@ set currentWaveform "sine"
 proc ::wave::setWavePath {wavePath} {
 	variable wave
 	
-	#Frame for Waveform Generator Controls
-	labelframe $wavePath.frame	\
-		-relief groove	\
-		-borderwidth 2	\
-		-text "Waveform Generator"	\
-		-font {-weight bold -size -12}
-	pack $wavePath.frame
-	
-	set wave(path) $wavePath.frame
+	set wave(path) $wavePath
 }
 
 proc ::wave::getWavePath {} {
@@ -56,10 +45,19 @@ proc ::wave::buildWave {} {
 
 	set wavePath [getWavePath]
 	
+	#Frame for Waveform Generator Controls
+	frame $wavePath	\
+		-relief raised	\
+		-borderwidth 2
+
 	#Waveform frequency controls
 	frame $wavePath.freq	\
 		-relief groove	\
 		-borderwidth 2
+		
+	label $wavePath.title	\
+		-text "Waveform Generator"	\
+		-font {-weight bold -size -16}
 		
 	scale $wavePath.freq.freqSlider	\
 		-from $::wave::sliderRange	\
@@ -108,43 +106,9 @@ proc ::wave::buildWave {} {
 		
 	label $wavePath.amp.title	\
 		-image $::wave::ampImage
-		
-	button $wavePath.amp.ampValue	\
-		-textvariable wave::amplitude	\
-		-width 8	\
-		-command wave::setAmplitude
-		
-	grid $wavePath.amp.title -row 0 -column 0 -sticky n
-	grid $wavePath.amp.ampValue -row 1 -column 0 -sticky n
-	grid $wavePath.amp.ampSlider -row 2 -column 0 -sticky n
-		
-	#Waveform Offset Controls
-	frame $wavePath.off	\
-		-relief groove	\
-		-borderwidth 2
-		
-	scale $wavePath.off.offSlider	\
-		-from 3.0	\
-		-to -3.0	\
-		-variable wave::offset	\
-		-orient vertical	\
-		-showvalue 1	\
-		-length $wave::ampSliderLength	\
-		-tickinterval 0.5	\
-		-resolution 0.001	\
-		-command wave::adjustOffset
-		
-	label $wavePath.off.title	\
-		-image $wave::offImage
-		
-	button $wavePath.off.offValue	\
-		-textvariable wave::offset	\
-		-width 8	\
-		-command wave::setOffset
 
-	grid $wavePath.off.title -row 0 -column 0 -sticky n
-	grid $wavePath.off.offValue -row 1 -column 0 -sticky n
-	grid $wavePath.off.offSlider -row 2 -column 0 -sticky n
+	grid $wavePath.amp.title -row 0 -column 0 -sticky n
+	grid $wavePath.amp.ampSlider -row 1 -column 0 -sticky n
 
 	#Waveform selection controls
 	frame $wavePath.wave	\
@@ -169,44 +133,27 @@ proc ::wave::buildWave {} {
 		
 	button $wavePath.wave.sine	\
 		-text "Sine"		\
-		-command {sendCommand "WW0";sendCommand "WR";set wave::currentWaveform "sine"}
+		-command {::wave::programWaveform sine.dat}
 		
 	button $wavePath.wave.square	\
 		-text "Square"	\
-		-command {sendCommand "WW1";sendCommand "WR";set wave::currentWaveform "square"}
+		-command {::wave::programWaveform square.dat}
 		
 	button $wavePath.wave.triangle	\
 		-text "Triangle"	\
-		-command {sendCommand "WW2";sendCommand "WR";set wave::currentWaveform "triangle"}
+		-command {::wave::programWaveform triangle.dat}
 		
 	button $wavePath.wave.sawtooth	\
 		-text "Sawtooth"	\
-		-command {sendCommand "WW3";sendCommand "WR";set wave::currentWaveform "sawtooth"}
-	
-	button $wavePath.wave.noise	\
-		-text "Noise"	\
-		-command {wave::programWaveform "random.dat"}
-
-	button $wavePath.wave.custom	\
-		-text "Stored Custom"	\
-		-command {sendCommand "WW4";sendCommand "WR";set wave::currentWaveform "stored"}
+		-command {::wave::programWaveform sawtooth.dat}
 		
-	button $wavePath.wave.loadCustom	\
-		-text "Load Custom"	\
+	button $wavePath.wave.custom	\
+		-text "Custom"	\
 		-command {::wave::openWaveform}
 		
-	button $wavePath.wave.saveCustom	\
-		-text "Save Custom"	\
-		-command {
-			sendCommand "WX"
-			tk_messageBox	\
-				-title "User Waveform"	\
-				-default ok		\
-				-message "The current user waveform has been saved to the device memory."	\
-				-type ok			\
-				-icon info
-			}
-
+	button $wavePath.wave.noise	\
+		-text "Noise"	\
+		-command {::wave::enableNoise}
 
 	grid $wavePath.wave.waveDisplay -row 0 -column 0
 	grid $wavePath.wave.freqDisplay -row 1 -column 0
@@ -214,10 +161,8 @@ proc ::wave::buildWave {} {
 	grid $wavePath.wave.square -row 3 -column 0 -sticky we
 	grid $wavePath.wave.triangle -row 4 -column 0 -sticky we
 	grid $wavePath.wave.sawtooth -row 5 -column 0 -sticky we
-	grid $wavePath.wave.noise	-row 6 -column 0 -sticky we
-	grid $wavePath.wave.custom -row 7 -column 0 -sticky we
-	grid $wavePath.wave.loadCustom -row 8 -column 0 -sticky we
-	grid $wavePath.wave.saveCustom -row 9 -column 0 -sticky we
+	grid $wavePath.wave.custom -row 6 -column 0 -sticky we
+	grid $wavePath.wave.noise -row 7 -column 0 -sticky we
 
 	#Sweep controls 
 	frame $wavePath.sweep	\
@@ -245,11 +190,11 @@ proc ::wave::buildWave {} {
 	grid $wavePath.sweep.linMode -row 2 -column 0 -sticky nw
 
 	#Waveform Generator Controls
-	grid $wavePath.amp -row 0 -column 0 -sticky n -rowspan 2 -padx 5
-	grid $wavePath.off -row 0 -column 1 -sticky n -rowspan 2 -padx 5
-	grid $wavePath.freq -row 0 -column 2 -rowspan 2 -padx 5
-	grid $wavePath.wave -row 0 -column 3 -sticky n -padx 5
-	grid $wavePath.sweep -row 1 -column 3 -sticky n -padx 5
+	grid $wavePath.title -row 0 -column 0 -columnspan 3 -sticky w
+	grid $wavePath.amp -row 1 -column 0 -sticky n -rowspan 2 -padx 5
+	grid $wavePath.freq -row 1 -column 1 -rowspan 2 -padx 5
+	grid $wavePath.wave -row 1 -column 2 -sticky n -padx 5
+	grid $wavePath.sweep -row 2 -column 2 -sticky n -padx 5
 
 }
 
@@ -304,6 +249,10 @@ proc ::wave::sendFrequency {freq} {
 	
 	#Calculate the phase integer
 	set freqOutput [expr {round($freq/$ddsResolution)}]
+
+	#Break the phase integer into a four byte number
+	set byte3 [expr {round(floor($freqOutput/pow(2,24)))}]
+	set freqOutput [expr {$freqOutput%round(pow(2,24))}]
 	
 	set byte2 [expr {round(floor($freqOutput/pow(2,16)))}]
 	set freqOutput [expr {$freqOutput%round(pow(2,16))}]
@@ -313,7 +262,7 @@ proc ::wave::sendFrequency {freq} {
 	
 	set byte0 $freqOutput
 	
-	sendCommand "WF$byte2 $byte1 $byte0"
+	sendCommand "W F $byte3 $byte2 $byte1 $byte0"
 	
 }
 
@@ -323,20 +272,9 @@ proc ::wave::sendFrequency {freq} {
 # the slider argument into an amplitude value and sends it to the hardware.
 proc ::wave::adjustAmplitude {sliderArg} {
 	
-	set amplitude [expr {round(4095.0*($sliderArg/100.0))}]
+	set amplitude [expr {round(255.0*($sliderArg/100.0))}]
 	
-	sendCommand "WA$amplitude"
-}
-
-# Adjust Waveform Offset
-#--------------------------------
-# This is a service procedure for the offset slider control.  It converts
-# the slider argument into an amplitude value and sends it to the hardware.
-proc ::wave::adjustOffset {sliderArg} {
-	
-	set offset [expr {round(4095.0*((3.0-$sliderArg)/6.0))}]
-	
-	sendCommand "WO$offset"
+	sendCommand "W A $amplitude"
 }
 
 # Manually Set Frequency
@@ -424,7 +362,7 @@ proc ::wave::programWaveform {fileName} {
 		$wavePath.wave.triangle configure -state disabled
 		$wavePath.wave.sawtooth configure -state disabled
 		$wavePath.wave.custom configure -state disabled
-		#$wavePath.wave.noise configure -state disabled
+		$wavePath.wave.noise configure -state disabled
 		
 		set sampleIndex 0
 		set samples [list]
@@ -443,15 +381,43 @@ proc ::wave::programWaveform {fileName} {
 		while {$sampleIndex < 256} {
 			set sampleValue [lindex $samples $sampleIndex]
 			
-			sendCommand "WC$sampleIndex $sampleValue"
+			sendCommand "W S $sampleIndex $sampleValue"
 			incr sampleIndex
 
 			update
 		}
 		
-		sendCommand "Wc"
+		sendCommand "W P"
 		
-		::wave::updateDisplay $samples
+		#Update the waveform display
+		set plotData {}
+		set scaleFactor [expr {266.0/90}]
+		#Get a few samples from the "previous" cycle
+		for {set i 250} {$i < 256} {incr i} {
+			#X-Coordinate
+			lappend plotData [expr {5+($i-250)/$scaleFactor}]
+			#Y-Coordinate
+			set sample [lindex $samples $i]
+			lappend plotData [expr {52.0+(($sample-128)/$scaleFactor)}]
+		}
+		#Draw one complete cycle of the waveform
+		for {set i 0} {$i <256} {incr i} {
+			#X-Coordinate
+			lappend plotData [expr {5+(5/$scaleFactor)+$i/$scaleFactor}]
+			#Y-Coordinate
+			set sample [lindex $samples $i]
+			lappend plotData [expr {52.0+(($sample-128)/$scaleFactor)}]
+		}
+		#Get a few samples from the "next" cycle
+		for {set j 0} {$j < 6} {incr j} {
+			#X-Coordinate
+			lappend plotData [expr {5+5/$scaleFactor+$j/$scaleFactor+$i/$scaleFactor}]
+			#Y-Coordinate
+			set sample [lindex $samples $j]
+			lappend plotData [expr {52.0+(($sample-128)/$scaleFactor)}]
+		}
+
+		::wave::updateDisplay $plotData
 		
 		set wave::waveFile $fileName
 	}
@@ -460,14 +426,14 @@ proc ::wave::programWaveform {fileName} {
 	[getWavePath].freq.freqSlider configure -state normal
 	
 	#Make sure we enable the waveform output and disable noise output
-	#sendCommand "W W"
+	sendCommand "W W"
 	
 	$wavePath.wave.sine configure -state normal
 	$wavePath.wave.square configure -state normal
 	$wavePath.wave.triangle configure -state normal
 	$wavePath.wave.sawtooth configure -state normal
 	$wavePath.wave.custom configure -state normal
-	#$wavePath.wave.noise configure -state normal
+	$wavePath.wave.noise configure -state normal
 
 }
 
@@ -475,38 +441,9 @@ proc ::wave::programWaveform {fileName} {
 #-------------------------------
 #This procedure updates the waveform display by drawing the waveform supplied
 #by "plotData" on the canvas.  Data in the plotData array should be x y pairs.
-proc ::wave::updateDisplay {samples} {
+proc ::wave::updateDisplay {plotData} {
 	
 	set wavePath [getWavePath]
-	
-	#Update the waveform display
-	set plotData {}
-	set scaleFactor [expr {266.0/90}]
-	#Get a few samples from the "previous" cycle
-	for {set i 250} {$i < 256} {incr i} {
-		#X-Coordinate
-		lappend plotData [expr {5+($i-250)/$scaleFactor}]
-		#Y-Coordinate
-		set sample [lindex $samples $i]
-		lappend plotData [expr {52.0+((128-$sample)/$scaleFactor)}]
-	}
-	#Draw one complete cycle of the waveform
-	for {set i 0} {$i <256} {incr i} {
-		#X-Coordinate
-		lappend plotData [expr {5+(5/$scaleFactor)+$i/$scaleFactor}]
-		#Y-Coordinate
-		set sample [lindex $samples $i]
-		lappend plotData [expr {52.0+((128-$sample)/$scaleFactor)}]
-	}
-	#Get a few samples from the "next" cycle
-	for {set j 0} {$j < 6} {incr j} {
-		#X-Coordinate
-		lappend plotData [expr {5+5/$scaleFactor+$j/$scaleFactor+$i/$scaleFactor}]
-		#Y-Coordinate
-		set sample [lindex $samples $j]
-		lappend plotData [expr {52.0+((128-$sample)/$scaleFactor)}]
-	}
-	
 	
 	$wavePath.wave.waveDisplay delete waveDisplayData
 	
@@ -587,73 +524,23 @@ proc ::wave::setMinFrequency {} {
 	}
 }
 
-#Set Waveform Amplitude
-#---------------
-#This procedure prompts the user for a new amplitude value.
-#The amplitude supplied by the user is checked to ensure that
-#it is a valid number and a valid amplitude setting.
-proc ::wave::setAmplitude {} {
+proc ::wave::enableNoise {} {
 
-	set newMin [Dialog_Prompt setMin "New Amplitude:"]
+	set wavePath [getWavePath]
 	
-	if {$newMin == ""} {return}
+	$wavePath.freq.freqSlider configure -state disabled
 	
-	if { [string is double -strict $newMin] } {
-		if { $newMin <= 100 && $newMin >= 0} {
-			set wave::amplitude [format "%.0f" $newMin]
-			set wavePath [getWavePath]
-			::wave::adjustAmplitude [$wavePath.amp.ampSlider get]
-		} else {
-			tk_messageBox	\
-			-title "Invalid Amplitude"	\
-			-default ok		\
-			-message "Invalid Amplitude.\nAmplitude must be between 0 and 100"	\
-			-type ok			\
-			-icon warning
-		}
-	} else {
-		tk_messageBox	\
-			-title "Invalid Amplitude"	\
-			-default ok		\
-			-message "Amplitude must be a number\nbetween 0 and 100"	\
-			-type ok			\
-			-icon warning
-		return
+	sendCommand "W N"
+	
+	for {set i 0} {$i <=100} {incr i} {
+		#X-Coordinate
+		lappend plotData $i
+		#Y-Coordinate
+		lappend plotData [expr {52.0+80*(rand()-0.5)}]
 	}
-}
 
-#Set Waveform Offset
-#---------------
-#This procedure prompts the user for a new offset value.
-#The offset supplied by the user is checked to ensure that
-#it is a valid number and a valid offset setting.
-proc ::wave::setOffset {} {
-
-	set newMin [Dialog_Prompt setMin "New Offset:"]
+	::wave::updateDisplay $plotData
 	
-	if {$newMin == ""} {return}
-	
-	if { [string is double -strict $newMin] } {
-		if { $newMin <= 3.0 && $newMin >= -3.0} {
-			set wave::offset [format "%.3f" $newMin]
-			set wavePath [getWavePath]
-			::wave::adjustOffset [$wavePath.off.offSlider get]
-		} else {
-			tk_messageBox	\
-			-title "Invalid Offset"	\
-			-default ok		\
-			-message "Invalid Offset.\nOffset must be between -3.0 and 3.0"	\
-			-type ok			\
-			-icon warning
-		}
-	} else {
-		tk_messageBox	\
-			-title "Invalid Offset"	\
-			-default ok		\
-			-message "Offset must be a number\nbetween -3.0 and 3.0"	\
-			-type ok			\
-			-icon warning
-		return
-	}
-}
+	set wave::waveFile "noise"
 
+}

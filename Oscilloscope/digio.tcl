@@ -17,46 +17,40 @@ set digout(1) 0
 set digout(0) 0
 
 #Digital I/O Images:
-set bitOffImages(7) [image create photo -file "$images/Bit7Off.png"]
-set bitOnImages(7) [image create photo -file "$images/Bit7On.png"]
-set bitOffImages(6) [image create photo -file "$images/Bit6Off.png"]
-set bitOnImages(6) [image create photo -file "$images/Bit6On.png"]
-set bitOffImages(5) [image create photo -file "$images/Bit5Off.png"]
-set bitOnImages(5) [image create photo -file "$images/Bit5On.png"]
-set bitOffImages(4) [image create photo -file "$images/Bit4Off.png"]
-set bitOnImages(4) [image create photo -file "$images/Bit4On.png"]
-set bitOffImages(3) [image create photo -file "$images/Bit3Off.png"]
-set bitOnImages(3) [image create photo -file "$images/Bit3On.png"]
-set bitOffImages(2) [image create photo -file "$images/Bit2Off.png"]
-set bitOnImages(2) [image create photo -file "$images/Bit2On.png"]
-set bitOffImages(1) [image create photo -file "$images/Bit1Off.png"]
-set bitOnImages(1) [image create photo -file "$images/Bit1On.png"]
-set bitOffImages(0) [image create photo -file "$images/Bit0Off.png"]
-set bitOnImages(0) [image create photo -file "$images/Bit0On.png"]
+set bitOffImages(7) [image create photo -file "$images/Bit7Off.gif"]
+set bitOnImages(7) [image create photo -file "$images/Bit7On.gif"]
+set bitOffImages(6) [image create photo -file "$images/Bit6Off.gif"]
+set bitOnImages(6) [image create photo -file "$images/Bit6On.gif"]
+set bitOffImages(5) [image create photo -file "$images/Bit5Off.gif"]
+set bitOnImages(5) [image create photo -file "$images/Bit5On.gif"]
+set bitOffImages(4) [image create photo -file "$images/Bit4Off.gif"]
+set bitOnImages(4) [image create photo -file "$images/Bit4On.gif"]
+set bitOffImages(3) [image create photo -file "$images/Bit3Off.gif"]
+set bitOnImages(3) [image create photo -file "$images/Bit3On.gif"]
+set bitOffImages(2) [image create photo -file "$images/Bit2Off.gif"]
+set bitOnImages(2) [image create photo -file "$images/Bit2On.gif"]
+set bitOffImages(1) [image create photo -file "$images/Bit1Off.gif"]
+set bitOnImages(1) [image create photo -file "$images/Bit1On.gif"]
+set bitOffImages(0) [image create photo -file "$images/Bit0Off.gif"]
+set bitOnImages(0) [image create photo -file "$images/Bit0On.gif"]
 
 #Frequency Settings for PWM
+set freqs {"72 kHz" "36 kHz" "9 kHz" "4.5 kHz" "1.125 kHz" "564 Hz" "281 Hz" "141 Hz" "70 Hz" "35 Hz"}
 set pwmDuty 0
-set pwmFrequency 1
 
 #Interrupt Images
 set IntOnImage [image create photo -file "$images/Inton.gif"]
 set IntOffImage [image create photo -file "$images/Intoff.gif"]
 
+#Interrupt Modes
+set intModes {"Disable" "Rising" "Falling" "High" "Low"}
+set intMode [lindex $intModes 0]
+
+#Floating/Docked State
+set state docked
+
 #Input value
 set inValue 0
-
-set frequencyDisplay "? Hz"
-
-set freqSliderRange 300
-set sliderMode "log"
-set minFrequencyLimit 1
-set maxFrequencyLimit 125000
-set minFrequency 1
-set maxFrequency 125000
-set defaultFrequency 1000
-
-
-
 
 #---=== Export Public Procedures ===---
 namespace export setDigioPath
@@ -69,14 +63,7 @@ namespace export buildDigio
 proc ::digio::setDigioPath {digioPath} {
 	variable digio
 	
-	#Frame for Digital I/O Controls
-	labelframe $digioPath.frame	\
-		-relief groove	\
-		-borderwidth 2	\
-		-text "Digital I/O"	\
-		-font {-weight bold -size -12}
-	pack $digioPath.frame
-	set digio(path) $digioPath.frame
+	set digio(path) $digioPath
 }
 
 proc ::digio::getDigioPath {} {
@@ -89,12 +76,17 @@ proc ::digio::buildDigio {} {
 
 	set digioPath [getDigioPath]
 	
+	#Frame for Digital I/O Controls
+	frame $digioPath
+	
 	#Digital Ouptut Controls
-	labelframe $digioPath.out	\
-		-relief groove	\
-		-borderwidth 2	\
+	frame $digioPath.out	\
+		-relief raised	\
+		-borderwidth 2
+
+	label $digioPath.out.title	\
 		-text "Digital Outputs"	\
-		-font {-weight bold -size -12}
+		-font {-weight bold -size -14}
 
 	for {set i 0} {$i < 8} { incr i} {
 		button $digioPath.out.$i	\
@@ -102,7 +94,8 @@ proc ::digio::buildDigio {} {
 			-command "::digio::toggleOutBit $i"
 	}
 
-	grid $digioPath.out.7 -row 1 -column 0 -pady 2
+	grid $digioPath.out.title -row 0 -column 0 -columnspan 4 -sticky w
+	grid $digioPath.out.7 -row 1 -column 0 -pady 9
 	grid $digioPath.out.6 -row 1 -column 1
 	grid $digioPath.out.5 -row 1 -column 2
 	grid $digioPath.out.4 -row 1 -column 3
@@ -112,18 +105,21 @@ proc ::digio::buildDigio {} {
 	grid $digioPath.out.0 -row 1 -column 7
 	
 	#Digital Input Indicators
-	labelframe $digioPath.in	\
-		-relief groove	\
-		-borderwidth 2	\
+	frame $digioPath.in	\
+		-relief raised	\
+		-borderwidth 2
+		
+	label $digioPath.in.title	\
 		-text "Digital Inputs"	\
-		-font {-weight bold -size -12}
+		-font {-weight bold -size -14}
 		
 	for {set i 0} {$i <8} {incr i} {
 		label $digioPath.in.$i	\
 			-image $::digio::bitOffImages($i)
 	}
 
-	grid $digioPath.in.7 -row 1 -column 0 -pady 4
+	grid $digioPath.in.title -row 0 -column 0 -columnspan 4 -sticky w
+	grid $digioPath.in.7 -row 1 -column 0 -pady 9
 	grid $digioPath.in.6 -row 1 -column 1
 	grid $digioPath.in.5 -row 1 -column 2
 	grid $digioPath.in.4 -row 1 -column 3
@@ -133,84 +129,91 @@ proc ::digio::buildDigio {} {
 	grid $digioPath.in.0 -row 1 -column 7
 
 	#PWM Control
-	labelframe $digioPath.pwm	\
-		-relief groove	\
-		-borderwidth 2	\
-		-text "Pulse Output"	\
-		-font {-weight bold -size -12}
-	
-	
-
-	#canvas $digioPath.pwm.display	\
-	#	-width 70	\
-	#	-height 15	\
-	#	-background white
-
-	labelframe $digioPath.pwm.duty	\
+	frame $digioPath.pwm	\
 		-relief raised	\
-		-borderwidth 2	\
-		-text "Duty Cycle"
+		-borderwidth 2
+		
+	label $digioPath.pwm.title	\
+		-text "PWM"	\
+		-font {-weight bold -size -14}
+		
+	canvas $digioPath.pwm.display	\
+		-width 66	\
+		-height 15	\
+		-background white
+		
+	label $digioPath.pwm.value	\
+		-textvariable pwmDuty	\
+		-width 3
 
-	scale $digioPath.pwm.duty.slider\
+	scale $digioPath.pwm.control	\
 		-from 0		\
-		-to 99			\
+		-to 100			\
 		-variable digio::pwmDuty	\
 		-orient horizontal	\
-		-showvalue 1	\
-		-length 240	\
-		-tickinterval 0	\
-		-resolution 1	\
-		-command ::digio::updateDuty
-		
-	pack $digioPath.pwm.duty.slider
-	
-	labelframe $digioPath.pwm.freq	\
-		-relief raised	\
-		-text "Frequency"
-		
-	button $digioPath.pwm.freq.display	\
-		-relief sunken	\
-		-borderwidth 3	\
-		-textvariable digio::frequencyDisplay	\
-		-font {-weight bold -size -12}	\
-		-background black	\
-		-foreground red	\
-		-width 10	\
-		-command digio::setFrequency
-		
-	scale $digioPath.pwm.freq.slider	\
-		-from 1	\
-		-to $digio::freqSliderRange	\
-		-variable digio::frequencyPosition	\
-		-orient horizontal	\
-		-tickinterval 0	\
-		-resolution 1	\
 		-showvalue 0	\
-		-length $digio::freqSliderRange		\
-		-command digio::adjustFrequency
-		
-	button $digioPath.pwm.freq.bottomValue	\
-		-textvariable digio::minFrequency	\
-		-width 8	\
-		-command digio::setMinFrequency
-		
-	button $digioPath.pwm.freq.topValue	\
-		-textvariable digio::maxFrequency	\
-		-width 8	\
-		-command digio::setMaxFrequency
+		-length 120	\
+		-tickinterval 50	\
+		-resolution 1	\
+		-command ::digio::updatePWM
+	if {$::osType!="Darwin"} {	
+		ComboBox $digioPath.pwm.freq	\
+			-values $digio::freqs	\
+			-width 12	\
+			-textvariable ::digio::pwmFreq	\
+			-bwlistbox 1	\
+			-hottrack 1		\
+			-editable 0		\
+			-modifycmd ::digio::selectFreq
+		$digioPath.pwm.freq setvalue first
+	} else {
+		spinbox $digioPath.pwm.freq	\
+			-values $digio::freqs	\
+			-width 12	\
+			-textvariable ::digio::pwmFreq	\
+			-state readonly	\
+			-readonlybackground white	\
+			-command ::digio::selectFreq	\
+			-wrap on
+	}
 	
-	grid $digioPath.pwm.freq.display -row 0 -column 1
-	grid $digioPath.pwm.freq.bottomValue -row 1 -column 0
-	grid $digioPath.pwm.freq.slider -row 1 -column 1
-	grid $digioPath.pwm.freq.topValue -row 1 -column 2
-	
-	#grid $digioPath.pwm.display -row 0 -column 1
-	grid $digioPath.pwm.duty -row 1 -column 0 -columnspan 3
+	grid $digioPath.pwm.title -row 0 -column 0 -sticky w
+	grid $digioPath.pwm.display -row 0 -column 1 -sticky we
+	grid $digioPath.pwm.value -row 0 -column 2 -sticky e
+	grid $digioPath.pwm.control -row 1 -column 0 -columnspan 3
 	grid $digioPath.pwm.freq -row 2 -column 0 -columnspan 3
+	
+	#Interrupt Indicator
+	frame $digioPath.int	\
+		-relief raised	\
+		-borderwidth 2
+		
+	label $digioPath.int.title	\
+		-text "Interrupt"		\
+		-font {-weight bold -size -14}
+	
+	button $digioPath.int.status	\
+		-image $digio::IntOffImage	\
+		-command ::digio::selectIntMode
+		
+	ComboBox $digioPath.int.mode	\
+		-values $digio::intModes	\
+		-width 8	\
+		-textvariable ::digio::intMode	\
+		-bwlistbox 1	\
+		-hottrack 1		\
+		-editable 0		\
+		-modifycmd ::digio::selectIntMode
+	$digioPath.int.mode setvalue first	
+	
+	grid $digioPath.int.title -row 0 -column 0
+	grid $digioPath.int.status -row 1 -column 0 -pady 1
+	grid $digioPath.int.mode -row 2 -column 0 -pady 1
 
-	grid $digioPath.in -row 0 -column 0  -ipady 3 -padx 2
-	grid $digioPath.out -row 1 -column 0 -ipady 3 -padx 2
-	grid $digioPath.pwm -row 0 -column 1 -padx 2 -rowspan 2
+	grid $digioPath.out -row 0 -column 0 -ipady 3 -padx 2
+	grid $digioPath.in -row 0 -column 1  -ipady 3 -padx 2
+	grid $digioPath.int -row 0 -column 2 -padx 2
+	grid $digioPath.pwm -row 0 -column 3 -padx 2
 
 }
 
@@ -254,60 +257,62 @@ proc ::digio::updateDigio {} {
 	set digReg [expr {$digReg+$digout(6)*64}]
 	set digReg [expr {$digReg+$digout(7)*128}]
 	
-	sendCommand "O $digReg"
+	sendCommand "D O $digReg"
 }
 
 # Update PWM Settings
 #-------------------------
 # This procedure services the PWM slider.  It updates the PWM display and
 # sends commands to the hardware to update the PWM output.
-proc ::digio::updateDuty {sliderArg} {
-	#variable pwmDuty
+proc ::digio::updatePWM {sliderArg} {
 
 	#Calculate the duty cycle (8-bit)
-	#set pwmDuty [expr {round($sliderArg/100.0*255)}]
+	set dutyCycle [expr {round($sliderArg/100.0*255)}]
 	
-	digio::updatePWM
-	
-	#sendCommand "D D $dutyCycle"
+	sendCommand "D D $dutyCycle"
 	
 	#Update the PWM Display
-#	set digioPath [getDigioPath]
+	set digioPath [getDigioPath]
 	
-## 	$digioPath.pwm.display delete pwmTag
- # 	
- # 	set plotData {}
- # 	
- # 	puts $sliderArg
- ##
+	$digioPath.pwm.display delete pwmTag
+	
+	set plotData {}
+	
+	puts $sliderArg
 
-## 	lappend plotData 3
- # 	lappend plotData 12
- # 
- # 	for {set i 0} {$i < 3} {incr i} {
- # 		if {$sliderArg > 0} {
- # 			lappend plotData [expr {3+20*$i}]
- # 			lappend plotData 2
- # 			set temp [expr {($sliderArg/100.0)*20+(3+20*$i)}]
- # 			lappend plotData $temp
- # 			lappend plotData 2
- # 			if {$sliderArg < 100} {
- # 				lappend plotData $temp
- # 				lappend plotData 12
- # 				lappend plotData [expr {3+20*($i+1)}]
- # 				lappend plotData 12
- # 			}
- # 		}
- # 	}
- # 	lappend plotData 63
- # 	lappend plotData 12
- # 	
- # 	$digioPath.pwm.display create line	\
- # 		$plotData	\
- # 		-tag pwmTag	\
- # 		-fill black		\
- # 		-width 1
- ##
+	lappend plotData 3
+	lappend plotData 12
+
+	for {set i 0} {$i < 3} {incr i} {
+		if {$sliderArg > 0} {
+			lappend plotData [expr {3+20*$i}]
+			lappend plotData 2
+			set temp [expr {($sliderArg/100.0)*20+(3+20*$i)}]
+			lappend plotData $temp
+			lappend plotData 2
+			if {$sliderArg < 100} {
+				lappend plotData $temp
+				lappend plotData 12
+				lappend plotData [expr {3+20*($i+1)}]
+				lappend plotData 12
+			}
+		}
+	}
+	lappend plotData 63
+	lappend plotData 12
+	
+	$digioPath.pwm.display create line	\
+		$plotData	\
+		-tag pwmTag	\
+		-fill black		\
+		-width 1
+
+}
+
+proc ::digio::readDigIn {} {
+
+	sendCommand "D I "
+
 
 }
 
@@ -330,203 +335,120 @@ proc ::digio::updateDigIn {value} {
 		
 }
 
-proc digio::adjustFrequency {sliderArg} {
-	variable freqSliderRange
-	variable minFrequency
-	variable maxFrequency
+proc ::digio::selectFreq {} {
 
-	if {$digio::sliderMode == "log"} {
-		#Logarithmic interpretation of slider position
-		set logMin [expr {log10($minFrequency)}]
-		set logMax [expr {log10($maxFrequency)}]
-		set b $logMin
-		set m [expr {($logMax-$logMin)/($freqSliderRange-1)}]
-		set y [expr {$m*($sliderArg-1)+$b}]
-		set frequency [expr {pow(10,$y)}]
+	switch $::digio::pwmFreq {
+		"72 kHz" {
+			sendCommand "D F 0"
+		} "36 kHz" {
+			sendCommand "D F 1"
+		} "9 kHz" {
+			sendCommand "D F 2"
+		} "4.5 kHz" {
+			sendCommand "D F 3"
+		} "1.125 kHz" {
+			sendCommand "D F 4"
+		} "564 Hz" {
+			sendCommand "D F 5"
+		} "281 Hz" {
+			sendCommand "D F 6"
+		} "141 Hz" {
+			sendCommand "D F 7"
+		} "70 Hz" {
+			sendCommand "D F 8"
+		} "35 Hz" {
+			sendCommand "D F 9"
+		}
+	}
+
+}
+
+proc ::digio::selectIntMode {} {
+
+	set digioPath [getDigioPath]
+
+	$digioPath.int.status configure -image $digio::IntOffImage
+
+	switch $digio::intMode {
+		"Rising" {
+			sendCommand "D ! R"
+		} "Falling" {
+			sendCommand "D ! F"
+		} "High" {
+			sendCommand "D ! H"
+		} "Low" {
+			sendCommand "D ! L"
+		} "Disable" {
+			sendCommand "D ! D"
+		}
+	}
+
+}
+
+proc ::digio::setInt {} {
+	
+	set digioPath [getDigioPath]
+
+	$digioPath.int.status configure -image $digio::IntOnImage
+}
+
+proc digio::floatDigio {} {
+	variable digout
+	variable bitOnImages
+	variable bitOffImages
+	
+	#Save the interrupt state
+	set digioPath [getDigioPath]	
+	set interruptState [$digioPath.int.status cget -image]
+	#Save the pwm frequency
+	set pwmFreq [$digioPath.pwm.freq get]
+	#Save the interrupt mode
+	set intMode [$digioPath.int.mode get]
+
+	if {$digio::state=="float"} {
+		#Hide the digio controls that are attached to the main window
+		grid remove .d
+	
+		#Create a floating window for the digital I/O controls
+		toplevel .dFloat
+		wm title .dFloat "Digital I/O Controls"
+		wm resizable .dFloat 0 0
+		digio::setDigioPath .dFloat.d
+		digio::buildDigio
+		grid .dFloat.d -row 0
+		bind .dFloat <Destroy> {set digio::state docked;digio::floatDigio}
 		
 	} else {
-		#Linear interpretation of slider position
-		set b $minFrequency
-		set m [expr {($maxFrequency-$minFrequency)/($freqSliderRange-1)}]
-		set y [expr {$m*($sliderArg-1)+$b}]
-		set frequency $y
-	}
 	
-	#Round to the nearest tenth of a hertz
-	set digio::pwmFrequency [format "%.1f" $frequency]
-	
-	#Update the hardware with the new frequency
-	digio::updatePWM
-	
-	#Update the frequency display
-	set digio::frequencyDisplay "$digio::pwmFrequency Hz"
-	
-
-}
-
-#Set Maximum Frequency
-#---------------
-#This procedure prompts the user for a new max frequency value.
-#The frequency supplied by the user is checked to ensure that
-#it is a valid number and a valid frequency setting.
-proc digio::setMaxFrequency {} {
-	variable minFrequency
-	variable maxFrequency
-	
-	set newMax [Dialog_Prompt setMax "New Maximum Frequency:"]
-	
-	if {$newMax == ""} { return }
-	
-	if { [string is double -strict $newMax]} {
-		if {$newMax > $minFrequency && $newMax <= $digio::maxFrequencyLimit} {
-			set digio::maxFrequency [format "%.1f" $newMax]
-			set digioPath [digio::getDigioPath]
-			digio::adjustFrequency [$digioPath.pwm.freq.slider get] 
-		} else {
-			tk_messageBox	\
-			-title "Invalid Frequency"	\
-			-default ok		\
-			-message "Invalid Frequency.\nMax frequency is $digio::maxFrequencyLimit\nMin frequency is $minFrequency"	\
-			-type ok			\
-			-icon warning
+		if {[winfo exists .dFloat]} {
+			bind .dFloat <Destroy> {destroy .dFloat}
+			destroy .dFloat 
 		}
-	} else {
-		tk_messageBox	\
-			-title "Invalid Frequency"	\
-			-default ok		\
-			-message "Frequency must be a number\nbetween $digio::minFrequencyLimit and $digio::maxFrequencyLimit."	\
-			-type ok			\
-			-icon warning
-		return
+		grid .d
+		digio::setDigioPath .d
+		
 	}
-}
-
-#Set Minimum Frequency
-#---------------
-#This procedure prompts the user for a new min frequency value.
-#The frequency supplied by the user is checked to ensure that
-#it is a valid number and a valid frequency setting.
-proc digio::setMinFrequency {} {
-	variable maxFrequency
-
-	set newMin [Dialog_Prompt setMin "New Minimum Frequency:"]
 	
-	if {$newMin == ""} {return}
-	
-	if { [string is double -strict $newMin] } {
-		if { $newMin < $maxFrequency && $newMin >= $digio::minFrequencyLimit} {
-			set digio::minFrequency [format "%.1f" $newMin]
-			set digioPath [digio::getDigioPath]
-			digio::adjustFrequency [$digioPath.pwm.freq.slider get]
+	#Restore the state of the input and output indicators
+	set digioPath [getDigioPath]
+
+	for {set bitNum 0} {$bitNum < 8} {incr bitNum} {
+		if {$digout($bitNum)==1} {
+			$digioPath.out.$bitNum configure -image $bitOnImages($bitNum)
 		} else {
-			tk_messageBox	\
-			-title "Invalid Frequency"	\
-			-default ok		\
-			-message "Invalid Frequency.\nMin frequency is $digio::minFrequencyLimit\nMax frequency is $maxFrequency"	\
-			-type ok			\
-			-icon warning
+			$digioPath.out.$bitNum configure -image $bitOffImages($bitNum)
 		}
-	} else {
-		tk_messageBox	\
-			-title "Invalid Frequency"	\
-			-default ok		\
-			-message "Frequency must be a number\nbetween $digio::minFrequencyLimit and $digio::maxFrequencyLimit."	\
-			-type ok			\
-			-icon warning
-		return
-	}
-}
-
-# Manually Set Frequency
-#---------------------------
-# This procedure is called when the user wants to manually set the waveform generator
-# output frequency.  It presents the user with a dialog box where they can enter
-# the desired output frequency.
-proc digio::setFrequency {} {
-	variable minFrequencyLimit
-	variable maxFrequencyLimit
-	variable frequencyDisplay
-	variable pwmFrequency
-	
-	#Dialog box for user to enter the new frequency
-	set newFreq [Dialog_Prompt newF "New Frequency:"]
-	
-	if {$newFreq == ""} {return}
-	
-	#Make sure that we got a valid frequency setting
-	if { [string is double -strict $newFreq] } {
-		if { $newFreq >= $minFrequencyLimit && $newFreq <= $maxFrequencyLimit} {
-			set frequencyDisplay [format "%.1f" $newFreq]
-			set pwmFrequency $frequencyDisplay
-			digio::updatePWM
-			set frequencyDisplay "$frequencyDisplay Hz"
-		} else {
-			tk_messageBox	\
-			-title "Invalid Frequency"	\
-			-default ok		\
-			-message "Frequency out of range: $minFrequencyLimit to $maxFrequencyLimit"	\
-			-type ok			\
-			-icon warning
-		}
-	} else {
-		tk_messageBox	\
-			-title "Invalid Frequency"	\
-			-default ok		\
-			-message "Frequency must be a number\nbetween $minFrequencyLimit and $maxFrequencyLimit"	\
-			-type ok			\
-			-icon warning
-		return
 	}
 	
-
-}
-
-proc digio::updatePWM {} {
-	variable pwmFrequency
-	variable pwmDuty
-
-	#Determine which prescaler is necessary for this PWM frequency
-	if {$pwmFrequency > 489} {
-		#Prescaler = 1
-		set prescaler 1
-		set clockFreq 32.0E6
-	} elseif {$pwmFrequency > 245} {
-		#Prescaler = 2
-		set prescaler 2
-		set clockFreq 16.0E6
-	} elseif {$pwmFrequency > 125} {
-		#Prescaler = 4
-		set prescaler 3
-		set clockFreq 8.0E6
-	} elseif {$pwmFrequency > 65} {
-		#Prescaler = 8
-		set prescaler 4
-		set clockFreq 4.0E6
-	} elseif {$pwmFrequency > 8}  {
-		#Prescaler = 64
-		set prescaler 5
-		set clockFreq 500.0E3
-	} elseif {$pwmFrequency > 2} {
-		#Prescaler = 256
-		set prescaler 6
-		set clockFreq 125.0E3
-	} else {
-		#Prescaler = 1024
-		set prescaler 7
-		set clockFreq 31.25E3
-	}
+	digio::updateDigIn $digio::inValue
 	
-	#Calculate the period in clock counts
-	set period [expr {round($clockFreq/$pwmFrequency)}]
+	#Restore the state of the interrupt indicator
+	$digioPath.int.status configure -image $interruptState
+	#Restore the PWM frequency
+	$digioPath.pwm.freq configure -text $pwmFreq
+	digio::selectFreq
+	#Restore the interrupt mode
+	$digioPath.int.mode configure -text $intMode
+	::digio::selectIntMode
 	
-	set duty [expr {round($pwmDuty/100.0*$period)}]
-	
-	#puts "Prescaler $prescaler"
-	#puts "Period $period"
-	#puts "Duty $duty"
-	sendCommand "WS$prescaler"
-	sendCommand "WP$period"
-	sendCommand "WD$duty"
-
-
 }

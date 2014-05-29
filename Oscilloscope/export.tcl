@@ -91,9 +91,9 @@ proc export::exportCSV {} {
 		foreach aValue $aData bValue $bData {
 			puts -nonewline $fileId [expr {$i*$timeStep}]
 			puts -nonewline $fileId ","
-			puts -nonewline $fileId [vertical::convertSampleVoltage $aValue A]
+			puts -nonewline $fileId [scope::convertSample $aValue a]
 			puts -nonewline $fileId ","
-			puts $fileId [vertical::convertSampleVoltage $bValue B]
+			puts $fileId [scope::convertSample $bValue b]
 			incr i
 		}
 	} elseif {$::opMode=="Netalyzer"} {
