@@ -1,0 +1,9 @@
+to startup
+end
+
+define rr[][reload startup]
+
+
+define clear-log [][erfile "log.txt]
+define pprint[str][print :str prfprint :str]
+
