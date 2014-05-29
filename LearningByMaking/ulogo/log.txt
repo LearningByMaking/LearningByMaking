@@ -6,3 +6,6 @@ ls
 
    undefined
 Welcome to Logo!
+Welcome to Logo!
+.print 234
+  234
