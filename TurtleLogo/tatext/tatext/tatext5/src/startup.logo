@@ -1,0 +1,438 @@
+;;;;;;;;;;;;;;;;;;;
+;
+; Turtle
+;
+;;;;;;;;;;;;;;;;;;;
+
+to forward :n
+calc-fd :n * :<scale>
+move-turtle
+end
+
+to arc :a :r
+if :a = 0 [stop]
+if :r = 0 [right :a stop]
+ifelse :a < 0 [larc :a :r * :<scale>][rarc :a :r  * :<scale>]
+end
+
+to rarc :a :r
+let [sgn :r / abs :r
+     r abs :r
+     dx :r * cos heading
+     dy :r * sin heading
+     cx :<txcor> + :dx
+     cy :<tycor> + :dy] 
+if :<pendown> [%arc :cx :cy :r heading - 90 :a * :sgn 
+                   :<rgb> :<pensize> * :<scale>]
+right :a * :sgn
+make "<txcor> :cx - :r * cos heading
+make "<tycor> :cy - :r * sin heading
+move-turtle
+end
+
+to larc :a :r
+let [sgn :r / abs :r
+     r abs :r
+     dx :r * cos heading
+     dy :r * sin heading
+     cx :<txcor> - :dx
+     cy :<tycor> - :dy] 
+if :<pendown> [%arc :cx :cy :r heading + 90 :a * :sgn
+                    :<rgb> :<pensize> * :<scale>]
+right :a * :sgn
+make "<txcor> :cx + :r * cos heading
+make "<tycor> :cy + :r * sin heading
+move-turtle
+end
+
+to calc-fd :n
+let [oldx :<txcor>
+     oldy :<tycor>] 
+make "<txcor> :<txcor> + :n * sin heading  
+make "<tycor> :<tycor> - :n * cos heading 
+if :<pendown> [%line :oldx :oldy :<txcor> :<tycor> 
+                   :<rgb> :<pensize> * :<scale>]
+end
+
+to setxy :x :y
+make "<txcor> :x + :<xoffset>
+make "<tycor> :<yoffset> - :y
+%setxy :<txcor> :<tycor>
+move-turtle
+end
+
+
+to back :n
+forward minus :n
+end
+
+to right :n
+setheading heading + :n
+end
+
+to left :n
+right minus :n
+end
+
+to towards :x :y
+seth arctan2 :x - xcor :y - ycor
+end
+
+to setheading :n
+let [h remainder :n 360]
+if :h < 0 [make "h :h + 360]
+%setheading :h
+end
+
+to startfill
+%startfill :<txcor> :<tycor>
+end
+
+to endfill
+%endfill :<rgb>
+end
+
+to fillscreen :c :s
+let [<colour#> :c
+     <shade> abs remainder :s 200
+     <rgb> 0]
+calc-color
+%fillscreen :<rgb>
+end
+
+to setcolor :n
+make "<colour#> :n
+calc-color
+end
+
+to setshade :n
+make "<shade> :n
+calc-color
+end
+
+to calc-color
+let [c merge-color-shade
+     g remainder int :<colour#> / 1000 200]
+if :g > 100 [make "g 200 - :g]
+make "<rgb> blend :c cvalue :c :g / 100
+end
+
+to merge-color-shade
+let [sh abs remainder :<shade> 200]
+if :sh > 100 [make "sh 200 - :sh]
+if :<colour#> = -9999 [output blend $000000 $ffffff :sh / 100]
+let [c get-colour-from-number :<colour#>]
+if :sh = 50 [output :c]
+if :sh < 50 [output blend :c $000000 ((50 - :sh) / 60)]
+output blend :c $ffffff  (:sh - 50) / 53
+end
+
+to get-colour-from-number :n
+make "n remainder :n 100
+let [c1 int :n
+     fract :n - int :n]
+output blend nth :c1 colors nth :c1 + 1 colors :fract 
+end
+
+to cvalue :c
+let [r logand $ff lsh :c -16
+     g logand $ff lsh :c -8
+     b logand $ff :c
+     m round (sqrt :r * :r + :g * :g + :b * :b) / sqrt 3]
+output :m * $010101
+end
+ 
+to blend :a :b :s
+if :s = 0 [output :a]
+let [ar logand $ff lsh :a -16
+     ag logand $ff lsh :a -8
+     ab logand $ff :a
+     br logand $ff lsh :b -16
+     bg logand $ff lsh :b -8
+     bb logand $ff :b
+     cr blend-one :ar :br :s
+     cg blend-one :ag :bg :s
+     cb blend-one :ab :bb :s]
+output (lsh :cr 16) + (lsh :cg 8) + :cb     
+end
+
+to blend-one :a :b :s
+output round :a * (1 - :s) + :b * :s
+end
+
+to colors
+output [
+$FF0000 $FF0D00 $FF1A00 $FF2600 $FF3300 $FF4000 $FF4D00 $FF5900 $FF6600 $FF7300
+$FF8000 $FF8C00 $FF9900 $FFA600 $FFB300 $FFBF00 $FFCC00 $FFD900 $FFE600 $FFF200
+$FFFF00 $E6FF00 $CCFF00 $B3FF00 $99FF00 $80FF00 $66FF00 $4DFF00 $33FF00 $1AFF00
+$00FF00 $00FF0D $00FF1A $00FF26 $00FF33 $00FF40 $00FF4D $00FF59 $00FF66 $00FF73
+$00FF80 $00FF8C $00FF99 $00FFA6 $00FFB3 $00FFBF $00FFCC $00FFD9 $00FFE6 $00FFF2
+$00FFFF $00F2FF $00E6FF $00D9FF $00CCFF $00BFFF $00B3FF $00A6FF $0099FF $008CFF
+$0080FF $0073FF $0066FF $0059FF $004DFF $0040FF $0033FF $0026FF $001AFF $000DFF
+$0000FF $0D00FF $1A00FF $2600FF $3300FF $4000FF $4D00FF $5900FF $6600FF $7300FF
+$8000FF $8C00FF $9900FF $A600FF $B300FF $BF00FF $CC00FF $D900FF $E600FF $F200FF
+$FF00FF $FF00E6 $FF00CC $FF00B3 $FF0099 $FF0080 $FF0066 $FF004D $FF0033 $FF001A
+$FF0000
+]
+end
+
+to storestate
+make "<statestack> fput (se xcor ycor heading scale pensize color shade) :<statestack>
+end
+
+to restorestate
+if empty? :<statestack> [error "|mismatched store/restore|]
+let [r first :<statestack>]
+make "<statestack> bf :<statestack>
+setxy nth 0 :r nth 1 :r
+seth nth 2 :r
+setscale nth 3 :r
+setpensize nth 4 :r
+setcolor nth 5 :r
+setshade nth 6 :r
+end
+
+define setpensize [n][make "<pensize> :n]
+define penup [][make "<pendown> false]
+define pendown [][make "<pendown> true]
+
+define shade [][output :<shade>]
+define pensize [][output :<pensize>]
+define color [][output :<colour#>]
+define xcor [][output :<txcor> - :<xoffset>]
+define ycor [][output :<yoffset> - :<tycor>]
+
+define fd [n][forward :n]
+define bk [n][back :n]
+define lt [n][left :n]
+define rt [n][right :n]
+define seth [n][setheading :n]
+define pu [][penup]
+define pd [][pendown]
+define setc [n][setcolor :n]
+define setps [n][setpensize :n]
+define setsh [n][setshade :n]
+define ht [][hideturtle]
+define st [][showturtle]
+define ht-st [][ifelse shown? [hideturtle][showturtle]]
+
+define setcs [c s][setcolor :c setshade :s]
+define setscale [n][make "<scale> :n]
+define scale [][output :<scale>]
+
+define storeinbox1 [n][make "<box1> :n]
+define storeinbox2 [n][make "<box2> :n]
+define box1 [][output :<box1>]
+define box2 [][output :<box2>]
+
+to clean
+make "<txcor> :<xoffset>
+make "<tycor> :<yoffset>
+make "<shade> 50
+make "<scale> 1
+make "<statestack> []
+fillscreen 64 92
+setcolor 0
+setpensize 4
+pendown
+%setheading 0
+showturtle
+move-turtle
+%dropfill
+end
+
+to move-turtle
+%tsetxy :<txcor> - 20  :<tycor> - 20
+;wait 0.1
+end
+
+;;;;;;;;;;;;;;;;;;;
+;
+; Load/Save
+;
+;;;;;;;;;;;;;;;;;;;
+
+
+to new
+clean
+make "<code> "
+settitle "untitled
+make "<file> "
+end
+
+to saveas :name
+make "<file> :name
+settitle :name
+save
+end
+
+to savecopy
+get-next-filename
+save
+settitle :<file>
+end
+
+to save
+imgstart
+imgprintln "TextTurtleArt
+imgprintln :<code>
+let [fname replace :<file> "\..* "]
+savepic :fname
+end
+
+to savetext
+filetostring :<file> :<code>
+end
+
+to load-button
+load file-field
+end
+
+to load :file
+make "<code> filetostring :file
+readfunctions :<code>
+settitle filenamefrompath :file
+make "<file> :file
+focuscc
+end
+
+to load-png :filename
+loadpic :filename true
+imgstart 
+if not (imgreadln 20) = "TextTurtleArt [error "|Not a TurtleArt project| stop]
+let [data bf bl imgreadln 100000]
+if empty? :data [stop]
+imgstart
+imgprintln "|just sawdust|
+make "<code> :data
+readfunctions :data
+settitle :filename
+make "<file> replace :filename "\..* ".txt
+setfile-field filenamefrompath :<file>
+print "loaded.
+end
+
+to get-next-filename
+let [num get-vnum :<file>]
+if :num = 0 [make "<file> word :<file> "| 0|]
+repeat count :num [make "<file> bl :<file>]
+make "<file> word :<file> :num + 1 
+if not file? (word :<dir> "/ :<file> ".png) [stop]
+get-next-filename
+end
+
+to get-vnum :name
+let [res "]
+loop
+ [if empty? :name [output 0]
+  if (last :name) = "| | [output :res]
+  make "res word last :name :res
+  if not number? :res [output 0]
+  make "name bl :name]
+end
+
+
+;;;;;;;;;;;;;;;;;;;
+;
+; Data Hiding
+;
+;;;;;;;;;;;;;;;;;;;
+
+to imgstart
+make "<imgx> 0 
+make "<imgy> 0
+end
+
+to imgprintln :x
+let [str word (string :x) char $ff
+     c 0 cksum 0]
+dotimes [i count :str]
+ [make "c ascii item :i + 1 :str
+  imgwb :c
+  make "cksum logand $ffff :cksum + :c]
+imgwb logand :cksum $ff 
+imgwb logand lsh :cksum -8 $ff 
+end
+
+
+to imgreadln :n
+let [res " c 0 cksum 0]
+repeat :n
+ [make "c imgrb
+  make "cksum logand $ffff :cksum + :c
+  if :c = $ff 
+   [if not :cksum = imgrb + lsh imgrb 8 [print "badsum output "]
+    output :res]
+  make "res word :res char :c]
+output "
+end
+
+to imgwb :n
+let [p1 getpixel :<imgx> :<imgy>
+     p2 getpixel :<imgx> :<imgy> + 1
+     p3 getpixel :<imgx> :<imgy> + 2] 
+setpixel :<imgx> :<imgy> (logand :p1 $fefefe) + (getbit :n 0) + (lsh getbit :n 1 8) + (lsh getbit :n 2 16)
+setpixel :<imgx> :<imgy> + 1 (logand :p2 $fefefe) + (getbit :n 3) + (lsh getbit :n 4 8) + (lsh getbit :n 5 16)
+setpixel :<imgx> :<imgy> + 2 (logand :p3 $fefefe) + (getbit :n 6) + (lsh getbit :n 7 8)
+imginc
+end
+
+to getbit :word :n
+output logand 1 lsh :word 0 - :n 
+end
+
+to imgrb
+let [p1 getpixel :<imgx> :<imgy>
+     p2 getpixel :<imgx> :<imgy> + 1
+     p3 getpixel :<imgx> :<imgy> + 2]
+imginc
+output (getbit :p1 0) + (lsh getbit :p1 8 1) + (lsh getbit :p1 16 2) +
+       (lsh getbit :p2 0 3) + (lsh getbit :p2 8 4) + (lsh getbit :p2 16 5) +
+       (lsh getbit :p3 0 6) + (lsh getbit :p3 8 7)
+end
+
+to imginc
+make "<imgx> :<imgx> + 1
+if :<imgx> < 500 [stop]
+make "<imgx> 0 
+make "<imgy> :<imgy> + 3
+end
+
+to drop-file :s
+let [dir dirnamefrompath :s
+     file filenamefrompath :s
+     parts split :file "\.]
+if (count :parts) < 2 [error "|not a png file|]
+if not (last :parts) = "png [error "|not a png file|]
+load-png :s
+end
+
+;;;;;;;;;;;;;;;;;;;
+;
+; etc
+;
+;;;;;;;;;;;;;;;;;;;
+
+to random2 :min :max
+ifelse and :min = int :min :max = int :max
+ [output :min + random :max - :min + 1]
+ [output :min + (:max - :min) * randf]
+;output :min + random :max - :min + 1
+end
+
+to oneof :a :b
+ifelse (random 100) < 50 [output :a][output :b]
+end
+
+
+to startup
+if name? "<txcor> [stop]
+createframe 590 0 700 560
+make "<xoffset> 700 / 2
+make "<yoffset> 560 / 2
+make "<box1> 0
+make "<box2> 0
+make "<dir> "
+make "<file> "
+clean
+end

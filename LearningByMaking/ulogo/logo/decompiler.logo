@@ -1,0 +1,106 @@
+to decompile-all
+dolist [i :plist-names][if (get :i "type) = "ufun [decompile :i print "]]
+end
+
+to decompile :name
+let [addr get :name "addr
+     endaddr get :name "endaddr
+     tab "]
+print (se :name (word "|(| hw :addr "|)|) "args: pfetch "locals: pfetch "len: :endaddr - :addr)
+loop
+ [if :addr = :endaddr [stop]
+  decompile-one pfetch
+ ]
+end
+
+to decompile-one :byte
+if :byte > 8 [print-op :byte stop] 
+if :byte = 1 [print-byte pfetch stop]
+if :byte = 2 [print-word pfetch pfetch stop]
+if :byte = 3 [print-list pfetch pfetch stop]
+if :byte = 4 [make "tab bf :tab 
+              print-with-comment "05 "|end of list| stop]
+if :byte = 5 [make "tab bf :tab 
+              print-with-comment "05 "|end of list with output| stop]
+if :byte = 6 [print-thing pfetch stop]
+if :byte = 7 [print-make pfetch stop]
+if :byte = 8 [print-call pfetch pfetch stop]
+print hb :byte
+end
+
+to print-op :op
+print-with-comment hb :op nth :op - 9 :prims
+end
+
+to print-byte :l
+print-with-comment (se "01 hb :l) (se "|push byte| :l (word "|($| hb :l "|)| ))
+end
+
+to print-word :l :h
+print-with-comment (se "02 hb :l hb :h) (se "|push word| hl :l :h (word "|($| hw hl :l :h "|)| ))
+end
+
+to print-list :l :h
+if (logand :h $f0) = $10 [print-string :l :h  stop]
+print-with-comment (se "03 hb :l hb :h) (se "list "|(length| word hl :l :h "|)|)
+make "tab word :tab "| |
+end
+
+to print-string :l :h
+let [len logand $fff hl :l :h
+     bytes (se "03 hb :l hb :h)
+     str char 124
+     char 0]
+repeat :len
+ [make "bytes se :bytes hb ppeek
+  make "char pfetch
+  ifelse :char = char 13 [make "char "\n][make "char char :char]
+  make "str word :str :char]
+print-with-comment  :bytes se "string word bl :str char 124
+end
+
+to print-call :l :h
+print-with-comment (se "08 hb :l hb :h) (se "|call| find-proc hl :l :h (word "|($| hw hl :l :h "|)| ))
+end
+
+to print-thing :n 
+let [argnames get :name "argnames
+     idx (count :argnames) - 1]
+ifelse :n > $7f
+ [print-with-comment (se "06 hb :n) se [push local] 255 - :n]
+ [print-with-comment (se "06 hb :n) se "push word ": nth :idx - :n :argnames]
+end
+
+to print-make :n 
+let [argnames get :name "argnames
+     idx (count :argnames) - 1]
+ifelse :n > $7f
+ [print-with-comment (se "07 hb :n) se [make local] 255 - :n]
+ [print-with-comment (se "07 hb :n) se "make nth :idx - :n :argnames]
+end
+
+to print-with-comment :w :c
+print (word fill word :tab :w 12 char 59 "| | :c)
+end
+
+to find-proc :addr
+dolist [i :plist-names][if (get :i "addr) = :addr [output :i]]
+end
+
+to fill :w :l
+repeat :l - count :w [make "w word :w "| |]
+repeat 2 [make "w word :w "| |]
+output :w
+end
+
+to pfetch
+let [res nth :addr - :proc-start :procs]
+make "addr :addr + 1
+output :res
+end
+
+to ppeek
+output nth :addr - :proc-start :procs
+end
+
+define hl [l h][output 256 * :h + :l]

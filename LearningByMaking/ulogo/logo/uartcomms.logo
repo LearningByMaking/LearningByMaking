@@ -1,0 +1,199 @@
+define onstart [][runvm $1040]
+define ongo [][runvm $1048]
+
+
+to ticktask
+make "ticks :ticks + 1
+let [res getstream]
+dolist [c :res]
+ [ifelse :c = 13 
+    [print :monstr make "monstr "]
+    [make "monstr word :monstr char :c]]
+end
+
+to getstream
+clearcom 
+esendl (se $aa 5 :who $80 $f9)
+let [c recc]
+if not :c = $aa [output []]
+let [res []]
+repeat recc - 2 [make "res se :res recc]
+output bf bf :res
+end
+
+to chip-check
+clearcom
+esendl (se $aa 5 :who $80 $ff)
+let [res get-packet]
+if not (count :res) = 5 [output false]
+output (last :res) = 37
+end
+
+to rl :addr :len
+esendl (se $aa 8 :who $80 $fe byte0 :addr byte1 :addr :len)
+output bf bf bf bf get-packet
+end
+
+to wl :addr :l
+let [len (count :l) + 7]
+esendl (se $aa :len :who $80 $fd byte0 :addr byte1 :addr :l)
+ignore get-packet
+end
+
+to wfl :addr :data
+loop
+ [if empty? :data [stop]
+  wfl1 :addr first32 :data
+  make "addr :addr + 32
+  make "data bf32 :data]
+end
+
+to wfl1 :addr :l
+let [len (count :l) + 7]
+esendl (se $aa :len :who $80 $fc byte0 :addr byte1 :addr :l)
+ignore get-packet
+end
+
+to erase-seg :addr
+esendl (se $aa 7 :who $80 $fb byte0 :addr byte1 :addr)
+ignore get-packet
+end
+
+to runvm :addr
+esendl (se $aa 7 :who $80 $fa byte0 :addr byte1 :addr)
+ignore get-packet
+end
+
+to stopvm 
+esendl (se $aa 5 :who $80 $f8)
+ignore get-packet
+end
+
+to printstream
+esendl (se $aa 5 :who $80 $f9)
+print hexl get-packet
+end
+
+
+to get-packet
+let [res [] c 0]
+loop
+ [make "c trecc 100
+  if :c = -1 [output :res]
+  make "res se :res :c]
+end
+
+to hexl :l
+let [res []]
+dolist [i :l][make "res se :res hb :i]
+output :res
+end
+
+
+to first32 :l
+if (count :l) < 32 [output :l]
+let [res []]
+dotimes [i 32][make "res se :res nth :i :l]
+output :res
+end
+
+to bf32 :l
+if (count :l) < 32 [output []]
+repeat 32 [make "l bf :l]
+output :l
+end
+
+
+;---------------
+;
+; low level comms
+;
+
+to esendl :l
+sendl :l
+if :onewire [repeat count :l [ignore recc]]
+end
+
+to send :n
+.send :n
+end
+
+to recc
+output trecc 100
+end
+
+to trecc :n
+let [c 0 starttime timer]
+loop 
+ [make "c .recc
+  if :c > -1 [output :c]
+  if (timer - :starttime) > :n [output -1]]
+end
+
+to start-comms
+let [os getproperty "os.name]
+talkto $10
+if windows? [open-windows-port stop]
+if member? "Linux :os [open-linux-port stop]
+open-mac-port
+end
+
+to open-named-port :name
+openport :name
+setportparams 19200 8 1 0
+end
+
+to open-windows-port
+usbinit
+let [names portnames $0403 $6001]
+dolist [i :names]
+ [carefully [openport :i][]
+  if not porthandle = 0 [make "portname :i setportparams 19200 8 1 0 stop]]
+print "|dongle not found| stop
+end
+
+to open-mac-port
+make "port find-mac-port
+if empty? :port [stop]
+openport :port
+ignore exec (word "|stty -f | :port "| 19200|)
+end
+
+to find-mac-port
+dolist [i files "/dev][if member? "cu.usbserial :i [output :i]]
+output "
+end
+
+to open-linux-port
+make "port find-linux-port
+if empty? :port [stop]
+openport :port
+ignore exec (word "|stty -F | :port "| raw -echo 19200|)
+end
+
+to find-linux-port
+dolist [i files "/dev][if member? "ttyUSB0 :i [output :i]]
+output "
+end
+
+to .reset
+dtrrts 0 0 wait .2
+dtrrts 1 0 wait .2
+end
+
+to reset
+dtrrts 0 1 wait .2
+dtrrts 1 1 wait .2
+end
+
+to dtrrts :dtr :rts
+ifelse windows? [modemctrl :dtr :rts][ioctrl :dtr :rts]
+end
+
+to ioctrl :dtr :rts
+ignore exec (word "|./ioctl | :port "| | :dtr "| | :rts "| 0|)
+end
+
+
+define recv[][output .recc]
+define talkto [n][make "who :n]
