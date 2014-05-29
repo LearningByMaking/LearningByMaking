@@ -1,6 +1,0 @@
-Welcome to Logo!
-.print 1234
-  I don't know how to .print
-print 1234
-  1234
-Welcome to Logo!
