@@ -1,3 +1,4 @@
 #!/bin/sh
 cd Oscilloscope
-./CGM101-linux-x86-64
+sudo chmod 777 /dev/*USB*
+./CGR101-linux-x86-64

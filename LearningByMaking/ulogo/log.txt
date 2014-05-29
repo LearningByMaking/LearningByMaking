@@ -9,3 +9,9 @@ Welcome to Logo!
 Welcome to Logo!
 .print 234
   234
+Welcome to Logo!
+print 1234
+  Chip not found.
+Welcome to Logo!
+.print 1234
+  1234
