@@ -1,0 +1,19 @@
+to go
+clean
+fillscreen 70 3
+setcolor 20
+drawbox 90
+end
+
+
+
+to drawbox  :n2
+setcolor 100
+fd :n2
+rt 90
+fd :n2
+rt 90
+fd :n2
+rt 90
+fd :n2
+end
