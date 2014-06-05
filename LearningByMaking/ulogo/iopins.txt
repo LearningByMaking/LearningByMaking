@@ -95,21 +95,72 @@ define dp8off [][bclr p3out pin6]
 define dp8on [][bset p3out pin6]
 
 
-; The following lines of code are for an exercise
-; please ignore them for now.  You will explore
-; their implications shortly :)
+; Ignore everything after this line
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 define allon [][ dp1on dp2on dp3on dp4on dp5on dp6on dp7on dp8on ]
 define alloff [][ dp1off dp2off dp3off dp4off dp5off dp6off dp7off dp8off ]   
 
 to blink :n1 :n2
    dp-init   
-   loop [ allon mwait :n1 alloff :n2 ]
+   loop [ allon mwait :n1 alloff mwait :n2 ]
 end
 
 to blink-test-1
    dp-init
-   loop [ allon mwait 20 alloffmwait 30 ]
+   loop [ allon mwait 20 alloff mwait 30 ]
 end
 
 to blink-test-2
